@@ -1,0 +1,436 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #0e1520;
+  --color-midnight: #131d2a;
+  --color-slate: #1b2736;
+  --color-slate-2: #243244;
+  --color-border-default: #334255;
+  --color-mist: #f1f4f7;
+  --color-fog: #c5ced8;
+  --color-smoke: #8d99a8;
+  --color-steel: #6b7d92;
+  --color-steel-soft: #8193a8;
+  --color-warm-gray: #9b8b80;
+  /* Tertiary — warm sand, used SPARINGLY for "action required / now" only */
+  --color-tertiary: #e2c19a;
+  --color-tertiary-soft: #c9a584;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Manrope", "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 30px;
+
+  --ease-soft: cubic-bezier(0.25, 0.8, 0.25, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+:root {
+  color-scheme: dark;
+  background: #07090e;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: var(--color-mist);
+}
+
+/* Use the dynamic viewport on mobile so the fixed bottom nav lands at the
+   visible bottom rather than behind a browser's collapsing toolbar. */
+#root {
+  height: 100dvh;
+}
+
+body {
+  background: radial-gradient(
+      circle at 50% -10%,
+      rgba(129, 147, 168, 0.18) 0%,
+      transparent 55%
+    ),
+    #07090e;
+  overflow: hidden;
+}
+
+@utility glass {
+  background: rgba(19, 29, 42, 0.72);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@utility glass-strong {
+  background: rgba(14, 21, 32, 0.86);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@utility glass-light {
+  background: rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Floating tab dock — true glassmorphism that keeps the brand alive: the
+   slate→midnight gradient is the Midnight Mist surface, and saturate() pulls
+   the destination imagery/brand tint behind it through the frost. */
+@utility nav-dock {
+  background: linear-gradient(
+    180deg,
+    rgba(36, 50, 68, 0.55) 0%,
+    rgba(19, 29, 42, 0.5) 100%
+  );
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 14px 40px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* The active tab's "hovered layer": a lifted frosted chip, lighter than the
+   dock so it reads as raised. Cool/neutral on purpose — sand tertiary is
+   reserved for "action required / now", never for navigation selection. */
+@utility nav-chip {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(255, 255, 255, 0.06) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 6px 16px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+@utility shadow-card {
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+}
+
+@utility shadow-lifted {
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.32);
+}
+
+@utility shadow-nav {
+  box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.3);
+}
+
+@utility shadow-modal {
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+}
+
+@utility hero-overlay {
+  background: linear-gradient(
+    180deg,
+    rgba(14, 21, 32, 0.1) 0%,
+    rgba(14, 21, 32, 0.56) 48%,
+    rgba(14, 21, 32, 0.94) 100%
+  );
+}
+
+.scroll-area::-webkit-scrollbar {
+  width: 0;
+  display: none;
+}
+.scroll-area {
+  scrollbar-width: none;
+}
+
+@keyframes hero-pan {
+  0% {
+    transform: scale(1.06) translate3d(-1%, -1%, 0);
+  }
+  100% {
+    transform: scale(1.12) translate3d(1%, 1%, 0);
+  }
+}
+
+.animate-hero-pan {
+  animation: hero-pan 18s var(--ease-soft) infinite alternate;
+}
+
+@keyframes fade-up {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.fade-up {
+  animation: fade-up 700ms var(--ease-out-expo) both;
+}
+
+@keyframes pulse-soft {
+  0%, 100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2.4s var(--ease-soft) infinite;
+}
+
+@keyframes shimmer-line {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(140%); }
+}
+
+.shimmer-line {
+  animation: shimmer-line 1.6s var(--ease-soft) infinite;
+}
+
+@keyframes slide-in {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.slide-in {
+  animation: slide-in 360ms var(--ease-out-expo) both;
+}
+
+@keyframes sheet-up {
+  0% { transform: translate3d(0, 100%, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+
+.sheet-up {
+  animation: sheet-up 360ms var(--ease-out-expo) both;
+}
+
+@keyframes overlay-fade {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+.overlay-fade {
+  animation: overlay-fade 240ms var(--ease-soft) both;
+}
+
+@keyframes scale-in {
+  0% { opacity: 0; transform: scale(0.96); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.scale-in {
+  animation: scale-in 320ms var(--ease-out-expo) both;
+}
+
+/* Brief attention ring used when a card is scrolled into view. */
+@keyframes flash-ring {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(129, 147, 168, 0); }
+  25% { box-shadow: 0 0 0 2px rgba(129, 147, 168, 0.55); }
+}
+
+.flash-ring {
+  animation: flash-ring 1.6s var(--ease-soft);
+}
+
+.tab-fade {
+  animation: fade-up 240ms var(--ease-out-expo) both;
+}
+
+.tappable {
+  transition: transform 120ms var(--ease-soft), background-color 120ms var(--ease-soft), border-color 120ms var(--ease-soft);
+}
+.tappable:active {
+  transform: scale(0.98);
+}
+
+.border-trans {
+  transition: border-color 200ms var(--ease-soft), background-color 200ms var(--ease-soft);
+}
+
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  App launch sequence — brand reveal                                         */
+/*  The arch traces upward to its peak (route → arrival), the guiding star     */
+/*  ignites, a horizon draws, and the wordmark settles.                        */
+/* -------------------------------------------------------------------------- */
+
+/* The mark settles in as it resolves. Only opacity + transform are animated —
+   deliberately NO clip-path / filter on the <img>, since that combination is a
+   known iOS Safari white-box trigger for images. The bloom span behind the mark
+   carries the "ignite" glow instead. */
+@keyframes launch-mark {
+  0% {
+    opacity: 0;
+    transform: scale(1.1) translateY(8px);
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.launch-mark {
+  animation: launch-mark 1150ms var(--ease-out-expo) both;
+}
+
+/* The guiding star ignites at the heart of the arch. */
+@keyframes launch-bloom {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.4);
+  }
+  45% {
+    opacity: 0.95;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.7);
+  }
+}
+.launch-bloom {
+  animation: launch-bloom 1300ms var(--ease-out-expo) 820ms both;
+}
+
+/* Horizon line draws outward from center. */
+@keyframes launch-line {
+  0% {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+.launch-line {
+  transform-origin: center;
+  animation: launch-line 780ms var(--ease-out-expo) 1020ms both;
+}
+
+/* Wordmark rises and its tracking settles tight. */
+@keyframes launch-word {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+    letter-spacing: 0.18em;
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    letter-spacing: -0.025em;
+  }
+}
+.launch-word {
+  animation: launch-word 860ms var(--ease-out-expo) 1180ms both;
+}
+
+.launch-tag {
+  animation: fade-up 720ms var(--ease-out-expo) 1640ms both;
+}
+
+/* Slim determinate progress. */
+@keyframes launch-progress {
+  0% {
+    transform: scaleX(0);
+  }
+  100% {
+    transform: scaleX(1);
+  }
+}
+.launch-progress {
+  transform-origin: left;
+  animation: launch-progress 2300ms var(--ease-soft) 220ms both;
+}
+
+/* Ambient: breathing glow + drifting sparkles echoing the guiding star. */
+@keyframes launch-glow {
+  0%,
+  100% {
+    opacity: 0.1;
+  }
+  50% {
+    opacity: 0.24;
+  }
+}
+.launch-glow {
+  animation: launch-glow 3.8s var(--ease-soft) infinite;
+}
+@keyframes launch-twinkle {
+  0%,
+  100% {
+    opacity: 0.1;
+    transform: scale(0.82);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.12);
+  }
+}
+.launch-twinkle {
+  animation: launch-twinkle 3.4s var(--ease-soft) infinite;
+}
+
+/* Exit — gentle dissolve + push, handing off to the app. */
+@keyframes launch-out {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.05);
+  }
+}
+.launch-out {
+  animation: launch-out 460ms var(--ease-out-expo) both;
+}
+
+/* The tab dock relies on Tailwind transition utilities (grid-template-columns,
+   opacity, transform). Collapse them to a near-instant crossfade for users who
+   ask for reduced motion — the label still appears, just without the morph. */
+@media (prefers-reduced-motion: reduce) {
+  .nav-dock,
+  .nav-dock * {
+    transition-duration: 1ms !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .launch-mark,
+  .launch-bloom,
+  .launch-line,
+  .launch-word,
+  .launch-tag,
+  .launch-progress,
+  .launch-twinkle,
+  .launch-glow {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
