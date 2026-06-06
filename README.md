@@ -1,4 +1,10 @@
-# React + TypeScript + Vite
+# Arrivo
+
+Your whole trip, ready. A travel companion app built with React, TypeScript, and Vite.
+
+Deployed on Vercel via GitHub: pushes to `main` ship to production automatically.
+
+---
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
