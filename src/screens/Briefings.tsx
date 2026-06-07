@@ -16,7 +16,7 @@ const BUCKET_META: Array<{
   {
     id: 'final',
     label: 'Pre-departure & landing',
-    sublabel: 'Save before you fly · open when you land',
+    sublabel: '',
     tone: 'final',
   },
 ]
@@ -181,7 +181,7 @@ function BucketBlock({
             {taskIds.length} {taskIds.length === 1 ? 'step' : 'steps'}
           </span>
         </h2>
-        <p className="mt-0.5 text-[12.5px] text-smoke">{sublabel}</p>
+        {sublabel && <p className="mt-0.5 text-[12.5px] text-smoke">{sublabel}</p>}
       </div>
 
       <div className="space-y-2">

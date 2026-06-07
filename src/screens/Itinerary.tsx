@@ -161,20 +161,12 @@ export function Itinerary(_props: { onBack: () => void }) {
           </>
         )}
 
-        <p className="mt-4 text-[12.5px] leading-[18px] text-smoke">
-          Arrivo doesn’t book for you. We map the route, then point you to the
-          right operators with the right timing.
-        </p>
-
         {/* Day-by-day */}
         {plan.itineraryDays.length > 0 && (
           <div ref={daySectionRef} className="scroll-mt-4">
             <h3 className="mt-9 text-[12px] font-semibold uppercase tracking-[0.14em] text-smoke">
               Day-by-day · sample
             </h3>
-            <p className="mt-1 text-[12.5px] text-smoke">
-              The shape of the trip — adjust as you book.
-            </p>
             <div className="mt-3 space-y-3 pb-12">
               {plan.itineraryDays.map((d, i) => {
                 const firstForCity = !seenCity.has(d.city)

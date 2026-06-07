@@ -93,10 +93,6 @@ export function Landing(_props: { onBack: () => void }) {
         <p className="mt-1.5 text-[15px] leading-[22px] text-smoke">
           Your offline guide is ready.
         </p>
-        <p className="mt-2 inline-flex items-center gap-1.5 text-[11.5px] font-medium text-smoke">
-          <span className="h-1 w-1 rounded-full bg-steel-soft" />
-          Saved offline · works without internet
-        </p>
       </header>
 
       {/* Body */}

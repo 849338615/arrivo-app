@@ -28,3 +28,9 @@ dist-ssr
 *.sln
 *.sw?
 .vercel
+
+# Local AI tooling state (Claude Code, Cursor, Gemini, etc.)
+.agents/
+.claude/
+.cursor/
+.gemini/
