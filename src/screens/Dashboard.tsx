@@ -71,6 +71,8 @@ export function Dashboard({
     .filter((c): c is Category => Boolean(c))
   const landing = cat('landing')
   const arrival = plan.arrivalAirport.code || plan.arrivalAirport.city
+  const pers = plan.personalization
+  const budget = plan.budgetTarget
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-ink no-select">
@@ -110,6 +112,18 @@ export function Dashboard({
               <br /> plan is ready.
             </h1>
 
+            {pers?.countdownDays != null && (
+              <div
+                className="fade-up mt-3 inline-flex items-center gap-1.5 self-start rounded-full border border-white/10 bg-white/[0.07] px-3 py-1 text-[12px] font-semibold text-mist backdrop-blur"
+                style={{ animationDelay: '170ms' }}
+              >
+                <AirplaneTakeoff size={13} weight="fill" className="text-steel-soft" />
+                {pers.countdownDays === 0
+                  ? 'Departure day'
+                  : `${pers.countdownDays} days to departure`}
+              </div>
+            )}
+
             <div className="fade-up mt-6" style={{ animationDelay: '220ms' }}>
               <div className="mb-2 flex items-baseline justify-between">
                 <span className="text-[12px] font-semibold text-fog">
@@ -132,8 +146,32 @@ export function Dashboard({
 
         {/* Body */}
         <div className="px-6 pt-6">
+          {/* TAILORED FOR YOU ---------------------------------------------- */}
+          {pers && (
+            <>
+              <SectionLabel label="Tailored for you" delay={250} />
+              <div className="mt-3 flex flex-wrap gap-2">
+                {pers.focus.map((f) => (
+                  <TailorChip key={f} accent>
+                    {f}
+                  </TailorChip>
+                ))}
+                <TailorChip>{pers.paceLabel} pace</TailorChip>
+                {budget && (
+                  <TailorChip>
+                    ~${budget.perDayUsd}/day · {budget.tier}
+                  </TailorChip>
+                )}
+                <TailorChip>{pers.experienceLabel}</TailorChip>
+                {pers.dietary.length > 0 && (
+                  <TailorChip>{pers.dietary.join(', ')}</TailorChip>
+                )}
+              </div>
+            </>
+          )}
+
           {/* READY NOW ----------------------------------------------------- */}
-          <SectionLabel label="Ready now" delay={300} />
+          <SectionLabel label="Ready now" delay={300} className={pers ? 'mt-7' : ''} />
           <div className="mt-3">
             <PrimaryActionCard
               plan={plan}
@@ -222,6 +260,22 @@ function SectionLabel({
   )
 }
 
+/* Compact chip for the "Tailored for you" strip. `accent` marks interest focus
+   so it reads as the lead signal without resorting to a saturated color. */
+function TailorChip({ children, accent = false }: { children: React.ReactNode; accent?: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-3 py-1.5 text-[12.5px] font-medium ${
+        accent
+          ? 'border-steel-soft/40 bg-steel-soft/10 text-mist'
+          : 'border-border-default bg-white/[0.05] text-fog'
+      }`}
+    >
+      {children}
+    </span>
+  )
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Primary action — current focus category                                   */
 /* -------------------------------------------------------------------------- */
@@ -241,7 +295,9 @@ function PrimaryActionCard({
   onStart: () => void
 }) {
   const Icon = CATEGORY_ICON[cat.id] ?? IdentificationCard
-  const previews = tasksForCategory(plan, cat.name).slice(0, 3)
+  const open = tasksForCategory(plan, cat.name).filter((t) => t.status !== 'complete')
+  const previews = (open.length ? open : tasksForCategory(plan, cat.name)).slice(0, 3)
+  const pending = Math.max(0, cat.total - cat.done)
 
   return (
     <article
@@ -266,7 +322,7 @@ function PrimaryActionCard({
         <div className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-tertiary/30 bg-tertiary/10 px-2.5">
           <Pip tone="tertiary" size={7} />
           <span className="whitespace-nowrap text-[11px] font-semibold tracking-[0.04em] text-tertiary">
-            {cat.total} pending
+            {pending} pending
           </span>
         </div>
       </div>
@@ -335,6 +391,8 @@ function UpNextCard({
   delay: number
 }) {
   const Icon = CATEGORY_ICON[cat.id] ?? IdentificationCard
+  const left = Math.max(0, cat.total - cat.done)
+  const allDone = left === 0
   return (
     <button
       onClick={onOpen}
@@ -350,11 +408,17 @@ function UpNextCard({
             {cat.name}
           </span>
           <span className="text-[11px] font-medium text-smoke">
-            {cat.total} {cat.total === 1 ? 'task' : 'tasks'}
+            {allDone ? 'Done' : `${left} ${left === 1 ? 'task' : 'tasks'}`}
           </span>
         </div>
         <div className="mt-0.5 truncate text-[13px] text-smoke">
-          Next: <span className="text-fog">{cat.blurb}</span>
+          {allDone ? (
+            <span className="text-fog">All set — nicely done.</span>
+          ) : (
+            <>
+              Next: <span className="text-fog">{cat.blurb}</span>
+            </>
+          )}
         </div>
       </div>
       <ArrowRight size={16} className="shrink-0 text-smoke" />

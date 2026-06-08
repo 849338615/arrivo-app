@@ -4,7 +4,8 @@ import { BottomNav } from './BottomNav'
 import { TopAppBar } from './TopAppBar'
 import { Loading, OnboardingHost, type Answers } from './screens/Onboarding'
 import { Launch } from './screens/Launch'
-import { DEFAULT_ANSWERS } from './lib/plan'
+import { DEFAULT_ANSWERS, normalizeAnswers, type TripPlan } from './lib/plan'
+import { completedTaskIds } from './lib/personalize'
 import { Dashboard } from './screens/Dashboard'
 import { Briefing } from './screens/Briefing'
 import { BriefingsList } from './screens/Briefings'
@@ -21,9 +22,11 @@ const ONBOARDING: ScreenId[] = [
   'date',
   'duration',
   'travelers',
-  'tripType',
+  'interests',
+  'pace',
   'budget',
-  'preparedness',
+  'profile',
+  'review',
   'loading',
 ]
 
@@ -45,11 +48,13 @@ function readExportRoute(): ExportRoute | null {
     case 'date':
     case 'duration':
     case 'travelers':
-    case 'tripType':
+    case 'interests':
+    case 'pace':
     case 'budget':
-    case 'preparedness':
+    case 'profile':
+    case 'review':
     case 'loading':
-      return { screen: key, tab: 'plan', taskId: null }
+      return { screen: key as ScreenId, tab: 'plan', taskId: null }
     case 'dashboard':
       return { screen: 'dashboard', tab: 'plan', taskId: null }
     case 'briefings':
@@ -83,7 +88,7 @@ export function App() {
   )
   const [tab, setTab] = useState<Tab>(exportRoute?.tab ?? 'plan')
   const [answers, setAnswers] = useState<Answers>(
-    () => loadSession()?.answers ?? DEFAULT_ANSWERS,
+    () => normalizeAnswers(loadSession()?.answers),
   )
   const [activeTaskId, setActiveTaskId] = useState<string | null>(
     exportRoute?.taskId ?? null,
@@ -109,6 +114,26 @@ export function App() {
     )
     return { taskToPredep: t2p, predepToTask: p2t }
   }, [predepGroups])
+
+  // Seed progress from the plan whenever it (re)generates: the engine pre-marks
+  // tasks the traveler has already handled (booked flights, seasoned basics) as
+  // complete, so the readiness count starts realistically instead of at zero.
+  // Render-time "adjust state when a prop changes" pattern (same as
+  // DestinationImage) — not an effect, so it never triggers cascading renders.
+  const activePlan = planState.plan
+  const [seededFor, setSeededFor] = useState<TripPlan | null>(null)
+  if (activePlan !== seededFor) {
+    setSeededFor(activePlan)
+    if (activePlan) {
+      const completed = completedTaskIds(activePlan)
+      setDoneTasks(new Set(completed))
+      const seed = new Set<string>()
+      completed.forEach((tid) =>
+        (taskToPredep[tid] ?? []).forEach((pid) => seed.add(pid)),
+      )
+      setDonePredep(seed)
+    }
+  }
 
   const isOnboarding = ONBOARDING.includes(screen)
 
@@ -216,6 +241,8 @@ export function App() {
         {screen === 'loading' && (
           <Loading
             ready={isExport || planState.status !== 'loading'}
+            sequencedFor={planState.plan?.personalization?.sequencedFor}
+            focus={planState.plan?.personalization?.focus}
             onDone={() => {
               if (isExport) return
               setScreen('dashboard')

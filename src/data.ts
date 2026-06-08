@@ -31,9 +31,11 @@ export type ScreenId =
   | 'date'
   | 'duration'
   | 'travelers'
-  | 'tripType'
+  | 'interests'
+  | 'pace'
   | 'budget'
-  | 'preparedness'
+  | 'profile'
+  | 'review'
   | 'loading'
   | 'dashboard'
   | 'briefing'
@@ -42,6 +44,35 @@ export type ScreenId =
   | 'landing'
 
 export type Tab = 'plan' | 'briefings' | 'itinerary' | 'landing'
+
+/* -------------------------------------------------------------------------- */
+/*  Onboarding flow map — drives ordering, the phase rail, and routing.        */
+/*  The flow is grouped into four phases so progress reads as a journey        */
+/*  rather than a long undifferentiated list.                                  */
+/* -------------------------------------------------------------------------- */
+
+export const ONBOARDING_PHASES = ['Basics', 'Style', 'You'] as const
+
+/** Question screens in order, each tagged with its phase index. The destination
+    is chosen on the splash search itself, so the rail starts at Basics; splash,
+    loading, and post-onboarding screens are intentionally excluded. */
+export const ONBOARDING_FLOW: Array<{ phase: number; screen: ScreenId }> = [
+  { phase: 0, screen: 'date' },
+  { phase: 0, screen: 'duration' },
+  { phase: 0, screen: 'travelers' },
+  { phase: 1, screen: 'interests' },
+  { phase: 1, screen: 'pace' },
+  { phase: 1, screen: 'budget' },
+  { phase: 2, screen: 'profile' },
+  { phase: 2, screen: 'review' },
+]
+
+export const ONBOARDING_TOTAL = ONBOARDING_FLOW.length
+
+/** Zero-based index of a question screen within the flow (−1 if not found). */
+export function flowIndex(screen: ScreenId): number {
+  return ONBOARDING_FLOW.findIndex((s) => s.screen === screen)
+}
 
 /* -------------------------------------------------------------------------- */
 /*  Featured destinations — curated images for the search screen's default    */
@@ -93,19 +124,116 @@ export const COUNTRIES = [
   },
 ]
 
-export const TRIP_TYPES = [
-  { id: 'culture', label: 'Culture', icon: 'BowlFood' },
-  { id: 'food', label: 'Food', icon: 'ForkKnife' },
-  { id: 'outdoors', label: 'Outdoors', icon: 'Mountains' },
-  { id: 'city', label: 'City', icon: 'Buildings' },
-  { id: 'offbeat', label: 'Off-the-beaten-path', icon: 'Compass' },
+/* Expanded interest set. `keywords` let the personalization engine detect which
+   existing itinerary day-blocks and briefings match an interest, so it can
+   reorder and annotate them. Selection ORDER is treated as weight (first =
+   strongest), so no separate weighting UI is needed. */
+export type TripType = {
+  id: string
+  label: string
+  icon: string
+  keywords: string[]
+}
+
+export const TRIP_TYPES: TripType[] = [
+  { id: 'culture', label: 'Culture', icon: 'Bank', keywords: ['temple', 'museum', 'art', 'shrine', 'palace', 'culture', 'heritage', 'wall', 'landmark'] },
+  { id: 'food', label: 'Food', icon: 'ForkKnife', keywords: ['food', 'market', 'dinner', 'lunch', 'breakfast', 'noodle', 'cuisine', 'eat', 'restaurant', 'dumpling', 'paomo', 'tea'] },
+  { id: 'outdoors', label: 'Outdoors', icon: 'Mountains', keywords: ['hike', 'mountain', 'trail', 'park', 'nature', 'outdoor', 'walk', 'lake', 'garden'] },
+  { id: 'city', label: 'City life', icon: 'Buildings', keywords: ['skyline', 'city', 'downtown', 'district', 'bund', 'tower', 'neighborhood', 'metro', 'jing'] },
+  { id: 'history', label: 'History', icon: 'BookOpen', keywords: ['history', 'old town', 'ancient', 'wall', 'historic', 'heritage', 'ruins', 'warriors', 'hutong'] },
+  { id: 'nightlife', label: 'Nightlife', icon: 'Martini', keywords: ['night', 'bar', 'evening', 'club', 'drinks', 'nightlife', 'sunset'] },
+  { id: 'shopping', label: 'Shopping', icon: 'ShoppingBag', keywords: ['shop', 'market', 'mall', 'boutique', 'design', 'store'] },
+  { id: 'relaxation', label: 'Relaxation', icon: 'Waves', keywords: ['beach', 'spa', 'relax', 'slow', 'rest', 'onsen', 'bath', 'quiet'] },
+  { id: 'offbeat', label: 'Off-the-beaten-path', icon: 'Compass', keywords: ['hidden', 'local', 'offbeat', 'hutong', 'quarter', 'backstreet', 'village'] },
 ]
+
+export function tripTypeById(id: string): TripType | undefined {
+  return TRIP_TYPES.find((t) => t.id === id)
+}
 
 export const TRAVELERS = [
   { id: 'solo', label: 'Solo', sub: 'Just me', icon: 'User' },
   { id: 'couple', label: 'Couple', sub: 'Two of us', icon: 'Users' },
   { id: 'family', label: 'Family', sub: 'With kids', icon: 'UsersThree' },
   { id: 'group', label: 'Group', sub: 'Friends or more', icon: 'UsersFour' },
+]
+
+/* Trip pace — drives how many activity blocks the engine packs per itinerary
+   day. `blocksPerDay` is the target the day-card builder aims for. */
+export const PACE_OPTIONS: Array<{
+  id: 'relaxed' | 'balanced' | 'packed'
+  label: string
+  sub: string
+  blocksPerDay: number
+}> = [
+  { id: 'relaxed', label: 'Relaxed', sub: 'Room to breathe, built-in downtime', blocksPerDay: 2 },
+  { id: 'balanced', label: 'Balanced', sub: 'A bit of everything, sensible pace', blocksPerDay: 3 },
+  { id: 'packed', label: 'Packed', sub: 'See as much as possible', blocksPerDay: 4 },
+]
+
+/* Travel experience — controls how much hand-holding the briefings give. */
+export const EXPERIENCE_OPTIONS: Array<{
+  id: 'first' | 'some' | 'seasoned'
+  label: string
+  sub: string
+  icon: string
+}> = [
+  { id: 'first', label: 'First international trip', sub: 'Guide me through everything', icon: 'Sparkle' },
+  { id: 'some', label: 'A few trips in', sub: 'I know the basics', icon: 'Compass' },
+  { id: 'seasoned', label: 'Seasoned traveler', sub: 'Just the essentials', icon: 'GlobeHemisphereWest' },
+]
+
+/* Optional needs — dietary, getting-around, and worries. All optional. Each id
+   maps to a concrete change the engine makes (phrases, notes, or re-ordering). */
+export const NEEDS_GROUPS: Array<{ group: string; items: Array<{ id: string; label: string }> }> = [
+  {
+    group: 'Dietary',
+    items: [
+      { id: 'vegetarian', label: 'Vegetarian' },
+      { id: 'vegan', label: 'Vegan' },
+      { id: 'halal', label: 'Halal' },
+      { id: 'glutenfree', label: 'Gluten-free' },
+      { id: 'allergy', label: 'Food allergy' },
+    ],
+  },
+  {
+    group: 'Getting around',
+    items: [
+      { id: 'stepfree', label: 'Step-free access' },
+      { id: 'lightwalking', label: 'Limited walking' },
+    ],
+  },
+  {
+    group: 'What you’re unsure about',
+    items: [
+      { id: 'language', label: 'Language barrier' },
+      { id: 'connectivity', label: 'Staying connected' },
+      { id: 'money', label: 'Money & payments' },
+      { id: 'safety', label: 'Safety' },
+    ],
+  },
+]
+
+export const DIETARY_IDS = ['vegetarian', 'vegan', 'halal', 'glutenfree', 'allergy']
+export const ACCESS_IDS = ['stepfree', 'lightwalking']
+
+/** Resolve a need id to its human label (across all groups). */
+export function needLabel(id: string): string {
+  for (const g of NEEDS_GROUPS) {
+    const hit = g.items.find((i) => i.id === id)
+    if (hit) return hit.label
+  }
+  return id
+}
+
+/* Budget tiers — preset chips that snap the slider, with a plain-language blurb
+   of what the tier buys. `id` matches budgetTier() output; `value` is the 0..100
+   slider position the chip jumps to (a representative point inside the band). */
+export const BUDGET_TIERS: Array<{ id: string; value: number; blurb: string }> = [
+  { id: 'Budget', value: 14, blurb: 'Hostels, guesthouses, street food, and public transit.' },
+  { id: 'Mid-range', value: 48, blurb: 'Comfortable 3★ hotels and a good mix of dining.' },
+  { id: 'Comfort', value: 78, blurb: 'Stylish 4★ stays, nicer meals, the occasional splurge.' },
+  { id: 'Premium', value: 96, blurb: 'Boutique & luxury stays and standout dining.' },
 ]
 
 export const PREP_ANCHORS = [
@@ -639,7 +767,7 @@ const CHINA_ITINERARY_DAYS: DayCard[] = [
     date: 'Sep 14',
     kind: 'arrival',
     blocks: [
-      { slot: 'morning', label: 'Landing at PEK', detail: 'Touch down 11:25 · taxi to hutong stay', meta: 'Buffer day — no plans' },
+      { slot: 'morning', label: 'Landing at PEK', detail: 'Touch down 11:25 · taxi to hutong stay', meta: 'Buffer day, no plans' },
       { slot: 'afternoon', label: 'Soft arrival walk', detail: 'Houhai lake loop, late lunch nearby' },
       { slot: 'evening', label: 'Early dinner', detail: 'Quiet noodles at the hutong, in bed by 9pm' },
     ],
@@ -651,7 +779,7 @@ const CHINA_ITINERARY_DAYS: DayCard[] = [
     kind: 'transit',
     blocks: [
       { slot: 'morning', label: 'Pack out', detail: 'Breakfast at hotel · Didi to Beijing West Station' },
-      { slot: 'afternoon', label: 'G87 high-speed rail', detail: '13:30 → 18:00 · Business class · 4h 30m', meta: 'Arrive 45 min early — passport ID check' },
+      { slot: 'afternoon', label: 'G87 high-speed rail', detail: '13:30 → 18:00 · Business class · 4h 30m', meta: 'Arrive 45 min early for passport ID check' },
       { slot: 'evening', label: 'Check in · City wall', detail: 'Hotel near South Gate, sunset walk on the wall' },
     ],
   },
@@ -806,7 +934,9 @@ export const ONBOARDING_BACKGROUNDS = {
   date: 'https://images.unsplash.com/photo-1508804185872-d7badad00f7d?auto=format&fit=crop&w=1200&q=80',
   duration: 'https://images.unsplash.com/photo-1547981609-4b6bfe67ca0b?auto=format&fit=crop&w=1200&q=80',
   travelers: 'https://images.unsplash.com/photo-1548919973-5cef591cdbc9?auto=format&fit=crop&w=1200&q=80',
-  tripType: 'https://images.unsplash.com/photo-1545893835-abaa50cbe628?auto=format&fit=crop&w=1200&q=80',
+  interests: 'https://images.unsplash.com/photo-1545893835-abaa50cbe628?auto=format&fit=crop&w=1200&q=80',
+  pace: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1200&q=80',
   budget: 'https://images.unsplash.com/photo-1518548419970-58e3b4079ab2?auto=format&fit=crop&w=1200&q=80',
-  preparedness: 'https://images.unsplash.com/photo-1474181487882-5abf3f0ba6c2?auto=format&fit=crop&w=1200&q=80',
+  profile: 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=1200&q=80',
+  review: 'https://images.unsplash.com/photo-1474181487882-5abf3f0ba6c2?auto=format&fit=crop&w=1200&q=80',
 }

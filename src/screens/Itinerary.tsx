@@ -78,7 +78,31 @@ export function Itinerary(_props: { onBack: () => void }) {
               <span className="whitespace-nowrap">{totalDays} days</span>
             </>
           )}
+          {plan.personalization?.countdownDays != null && (
+            <>
+              <Dot variant="smoke" />
+              <span className="whitespace-nowrap text-steel-soft">
+                {plan.personalization.countdownDays} days to go
+              </span>
+            </>
+          )}
         </div>
+
+        {plan.personalization && (plan.personalization.focus.length > 0 || plan.personalization.paceLabel) && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {plan.personalization.focus.map((f) => (
+              <span
+                key={f}
+                className="inline-flex items-center rounded-full border border-steel-soft/40 bg-steel-soft/10 px-2.5 py-1 text-[11.5px] font-medium text-mist"
+              >
+                {f}
+              </span>
+            ))}
+            <span className="inline-flex items-center rounded-full border border-border-default bg-white/[0.05] px-2.5 py-1 text-[11.5px] font-medium text-fog">
+              {plan.personalization.paceLabel} pace
+            </span>
+          </div>
+        )}
       </div>
 
       <div
@@ -277,61 +301,65 @@ const SLOT_LABEL: Record<DayBlock['slot'], string> = {
 }
 
 function DayCardView({ day, delay }: { day: DayCard; delay: number }) {
+  // The day-type marker only earns its place on the exceptional days (arriving,
+  // moving cities). Ordinary explore days carry no badge, so the title leads.
   const kindLabel =
     day.kind === 'arrival'
-      ? 'Arrival day'
+      ? 'Arrival'
       : day.kind === 'transit'
-        ? 'Transit day'
-        : 'Explore'
-  // Avoid repeating the kind in the eyebrow when the date already carries it.
-  const showDate =
-    day.date && day.date.trim().toLowerCase() !== kindLabel.toLowerCase()
+        ? 'Transit'
+        : null
   return (
     <article
-      className="fade-up rounded-2xl border border-border-default bg-slate p-5 shadow-card"
+      className="fade-up rounded-3xl border border-border-default bg-slate p-5 shadow-card"
       style={{ animationDelay: `${delay}ms` }}
     >
+      {/* Header — the date is the eyebrow, the place is the anchor, and the
+          day-type sits quietly beside it instead of competing as a loud pill. */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-smoke">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-smoke">
             Day {day.dayNumber}
-            {showDate && (
-              <>
-                <span className="h-1 w-1 rounded-full bg-smoke/60" />
-                {day.date}
-              </>
-            )}
+            {day.date && <span className="text-smoke/70"> · {day.date}</span>}
           </div>
-          <h4 className="mt-1 truncate font-display text-[18px] font-semibold tracking-[-0.005em] text-mist">
+          <h4 className="mt-1.5 truncate font-display text-[19px] font-semibold leading-[24px] tracking-[-0.01em] text-mist">
             {day.city}
           </h4>
         </div>
-        <span className="inline-flex h-6 shrink-0 items-center rounded-full border border-white/[0.08] bg-white/[0.04] px-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-fog">
-          {kindLabel}
-        </span>
+        {kindLabel && (
+          <span className="mt-1 inline-flex shrink-0 items-center rounded-full bg-white/[0.05] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-fog">
+            {kindLabel}
+          </span>
+        )}
       </div>
 
-      <ul className="mt-4 space-y-3">
-        {day.blocks.map((b) => {
+      {/* Day as a calm sequence — one hairline rail, light time-of-day stations.
+          The icon carries the time of day; the activity title leads each stop. */}
+      <ol className="mt-5">
+        {day.blocks.map((b, idx) => {
           const Icon = SLOT_ICON[b.slot]
+          const last = idx === day.blocks.length - 1
           return (
-            <li key={b.slot} className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] text-fog">
-                <Icon size={14} weight="fill" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-smoke">
-                  {SLOT_LABEL[b.slot]}
-                </span>
-                <div className="mt-0.5 text-[14px] font-semibold leading-[18px] text-mist">
+            <li key={`${b.slot}-${idx}`} className="relative flex gap-3.5 pb-5 last:pb-0">
+              {!last && (
+                <span
+                  aria-hidden
+                  className="absolute left-4 top-8 bottom-0 w-px -translate-x-1/2 bg-border-default/60"
+                />
+              )}
+              <span className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-2 text-fog ring-1 ring-inset ring-white/[0.05]">
+                <Icon size={15} weight="fill" aria-label={SLOT_LABEL[b.slot]} />
+              </span>
+              <div className="min-w-0 flex-1 pt-1.5">
+                <div className="font-display text-[15px] font-semibold leading-[20px] tracking-[-0.005em] text-mist">
                   {b.label}
                 </div>
-                <div className="mt-0.5 text-[12.5px] leading-[18px] text-fog">
+                <div className="mt-1 text-[13px] leading-[18px] text-fog">
                   {b.detail}
                 </div>
                 {b.meta && (
-                  <div className="mt-1.5 flex items-start gap-1.5 text-[11.5px] leading-[16px] text-smoke">
-                    <span className="mt-[5px] h-1 w-1 shrink-0 rounded-full bg-steel-soft/70" />
+                  <div className="mt-2 flex items-start gap-2 text-[12px] leading-[16px] text-fog">
+                    <Pip tone="steel" className="mt-[5px]" />
                     <span className="min-w-0">{b.meta}</span>
                   </div>
                 )}
@@ -339,7 +367,7 @@ function DayCardView({ day, delay }: { day: DayCard; delay: number }) {
             </li>
           )
         })}
-      </ul>
+      </ol>
     </article>
   )
 }

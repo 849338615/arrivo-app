@@ -90,9 +90,6 @@ export function Landing(_props: { onBack: () => void }) {
         <h1 className="mt-3 font-display text-[34px] font-bold leading-[40px] tracking-[-0.015em] text-mist">
           Welcome to {heroCity}.
         </h1>
-        <p className="mt-1.5 text-[15px] leading-[22px] text-smoke">
-          Your offline guide is ready.
-        </p>
       </header>
 
       {/* Body */}

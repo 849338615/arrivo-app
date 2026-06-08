@@ -1,4 +1,4 @@
-import { ArrowRight, Clock, WifiSlash } from '@phosphor-icons/react'
+import { ArrowRight, Clock, Faders, WifiSlash } from '@phosphor-icons/react'
 import { usePlan } from '../lib/PlanContext'
 import { totalSteps } from '../lib/plan'
 import { StepNode } from '../components'
@@ -48,6 +48,12 @@ export function BriefingsList({
         <p className="mt-2 text-[15px] leading-[22px] text-fog">
           Your sequenced roadmap, from now to landing day.
         </p>
+        {plan.personalization?.sequencedFor && (
+          <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-border-default bg-white/[0.05] px-3 py-1.5 text-[12px] font-medium text-fog">
+            <Faders size={12} className="text-steel-soft" />
+            Sequenced for {plan.personalization.sequencedFor}
+          </div>
+        )}
       </div>
 
       <div className="scroll-area mt-7 flex-1 overflow-y-auto px-6 pb-32">

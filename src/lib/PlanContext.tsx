@@ -7,11 +7,9 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { TripAnswers, TripPlan } from './plan'
+import { normalizeAnswers, type TripAnswers, type TripPlan } from './plan'
 import { CHINA_PLAN } from '../data'
-import { CURATED_PLANS } from './curatedPlans'
-import { factsFor } from './facts'
-import { buildTemplatedPlan } from './templatePlan'
+import { personalizePlan, selectBasePlan } from './personalize'
 import { clearSession, loadPlan, loadSession, savePlan, saveSession } from './storage'
 
 export type PlanStatus = 'idle' | 'loading' | 'ready' | 'error'
@@ -38,16 +36,13 @@ export function PlanProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<PlanStatus>(plan ? 'ready' : 'idle')
 
   // Build the plan entirely from bundled offline content — instant, no
-  // network, no API key. Curated countries get a rich hand-tuned plan; any
-  // other country gets a sensible plan templated from bundled facts.
-  const generate = useCallback(async (answers: TripAnswers) => {
+  // network, no API key. `selectBasePlan` picks the richest base (China sample,
+  // a curated country, or a templated fallback); `personalizePlan` then tailors
+  // it to the answers so the output visibly reflects every choice.
+  const generate = useCallback(async (raw: TripAnswers) => {
     setStatus('loading')
-    const code = (answers.countryCode || '').toUpperCase()
-    const next: TripPlan =
-      code === 'CN'
-        ? CHINA_PLAN
-        : CURATED_PLANS[code] ??
-          buildTemplatedPlan(factsFor(answers.countryCode, answers.countryName), answers, {})
+    const answers = normalizeAnswers(raw)
+    const next: TripPlan = personalizePlan(selectBasePlan(answers), answers)
     setPlan(next)
     savePlan(next)
     saveSession({ countryCode: next.country.code, answers, completed: true })

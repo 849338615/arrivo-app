@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode, MouseEvent } from 'react'
-import { Check, X } from '@phosphor-icons/react'
+import { CaretLeft, CaretRight, Check, X } from '@phosphor-icons/react'
 import { fetchImage } from './lib/api'
 
 /* -------------------------------------------------------------------------- */
@@ -568,4 +568,210 @@ export function StepBar({ step, total }: { step: number; total: number }) {
       })}
     </div>
   )
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Phase rail — grouped onboarding progress                                   */
+/*                                                                            */
+/*  Reads as a journey of named phases rather than an undifferentiated "step   */
+/*  n of N". Completed phases fill steel-soft with a check; the current phase  */
+/*  fills mist proportionally to its sub-progress; upcoming phases stay quiet. */
+/* -------------------------------------------------------------------------- */
+
+export function PhaseRail({
+  phases,
+  active,
+  subProgress = 0,
+}: {
+  phases: readonly string[]
+  active: number
+  /** 0..1 progress through the active phase. */
+  subProgress?: number
+}) {
+  return (
+    <div className="flex w-full gap-2">
+      {phases.map((label, i) => {
+        const done = i < active
+        const current = i === active
+        const fill = done ? 1 : current ? Math.max(0.14, Math.min(1, subProgress)) : 0
+        return (
+          <div key={label} className="min-w-0 flex-1">
+            <div className="h-[3px] overflow-hidden rounded-full bg-border-default">
+              <div
+                className={`h-full rounded-full transition-[width,background-color] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                  done ? 'bg-steel-soft' : 'bg-mist'
+                }`}
+                style={{ width: `${fill * 100}%` }}
+              />
+            </div>
+            <div
+              className={`mt-2 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                current ? 'text-mist' : done ? 'text-fog' : 'text-smoke'
+              }`}
+            >
+              {done && <Check size={10} weight="bold" className="shrink-0 text-steel-soft" />}
+              <span className="truncate">{label}</span>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Segmented control — design system §10.2                                    */
+/* -------------------------------------------------------------------------- */
+
+export function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  options: Array<{ id: T; label: string }>
+  value: T
+  onChange: (v: T) => void
+  ariaLabel?: string
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label={ariaLabel}
+      className="glass-light flex w-full gap-1 rounded-full p-1"
+    >
+      {options.map((o) => {
+        const selected = o.id === value
+        return (
+          <button
+            key={o.id}
+            role="radio"
+            aria-checked={selected}
+            onClick={() => onChange(o.id)}
+            className={`tappable border-trans h-11 flex-1 rounded-full border text-[13.5px] font-semibold ${
+              selected
+                ? 'border-steel-soft bg-slate-2 text-mist shadow-card'
+                : 'border-transparent text-fog hover:text-mist'
+            }`}
+          >
+            {o.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Month calendar — single-date picker for exact departure dates             */
+/* -------------------------------------------------------------------------- */
+
+const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+const CAL_MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
+
+function toISO(y: number, m: number, d: number): string {
+  return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+}
+
+export function MonthCalendar({
+  value,
+  onChange,
+}: {
+  /** Selected date as ISO yyyy-mm-dd. */
+  value?: string
+  onChange: (iso: string) => void
+}) {
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const selected = value ? parseLocalISO(value) : null
+
+  const [view, setView] = useState(() => {
+    const base = selected ?? today
+    return { y: base.getFullYear(), m: base.getMonth() }
+  })
+
+  const firstDow = new Date(view.y, view.m, 1).getDay()
+  const daysInMonth = new Date(view.y, view.m + 1, 0).getDate()
+  // Don't let travelers page back before the current month.
+  const atFloor = view.y === today.getFullYear() && view.m === today.getMonth()
+
+  const shift = (delta: number) =>
+    setView(({ y, m }) => {
+      const d = new Date(y, m + delta, 1)
+      return { y: d.getFullYear(), m: d.getMonth() }
+    })
+
+  return (
+    <div className="rounded-3xl border border-border-default bg-slate p-4 shadow-card">
+      <div className="flex items-center justify-between px-1">
+        <button
+          onClick={() => !atFloor && shift(-1)}
+          disabled={atFloor}
+          aria-label="Previous month"
+          className="tappable flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.05] text-fog disabled:opacity-30"
+        >
+          <CaretLeft size={15} weight="bold" />
+        </button>
+        <div className="text-[14px] font-semibold text-mist">
+          {CAL_MONTHS[view.m]} {view.y}
+        </div>
+        <button
+          onClick={() => shift(1)}
+          aria-label="Next month"
+          className="tappable flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.05] text-fog"
+        >
+          <CaretRight size={15} weight="bold" />
+        </button>
+      </div>
+
+      <div className="mt-3 grid grid-cols-7 gap-1">
+        {WEEKDAYS.map((d, i) => (
+          <div
+            key={i}
+            className="flex h-7 items-center justify-center text-[11px] font-semibold uppercase tracking-[0.04em] text-smoke"
+          >
+            {d}
+          </div>
+        ))}
+        {Array.from({ length: firstDow }).map((_, i) => (
+          <div key={`b-${i}`} />
+        ))}
+        {Array.from({ length: daysInMonth }).map((_, i) => {
+          const day = i + 1
+          const date = new Date(view.y, view.m, day)
+          const past = date < today
+          const iso = toISO(view.y, view.m, day)
+          const isSelected = value === iso
+          const isToday = date.getTime() === today.getTime()
+          return (
+            <button
+              key={day}
+              disabled={past}
+              onClick={() => onChange(iso)}
+              className={`tappable flex h-9 items-center justify-center rounded-xl text-[13.5px] font-medium transition-colors ${
+                isSelected
+                  ? 'bg-mist font-semibold text-ink'
+                  : past
+                    ? 'text-smoke/30'
+                    : isToday
+                      ? 'border border-steel-soft/60 text-mist'
+                      : 'text-fog hover:bg-white/[0.06]'
+              }`}
+            >
+              {day}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function parseLocalISO(iso: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
+  if (!m) return null
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
 }

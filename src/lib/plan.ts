@@ -117,15 +117,27 @@ export type PredepartureGroup = { group: string; items: PredepartureItem[] }
 
 export type Currency = { code: string; symbol: string; usdRate: number }
 
+export type Pace = 'relaxed' | 'balanced' | 'packed'
+export type Experience = 'first' | 'some' | 'seasoned'
+
 /** The onboarding answers that drive plan generation. */
 export type TripAnswers = {
   countryCode: string
   countryName?: string
   dateMode: 'exact' | 'flexible' | 'within3'
+  /** ISO yyyy-mm-dd, set only when dateMode === 'exact'. */
+  startDate?: string
   durationDays: number
   travelers: string
+  /** Optional headcount nuance for couple / family / group. */
+  partySize?: number
+  /** Expanded interest set; selection order is treated as weight. */
   tripTypes: string[]
+  pace: Pace
   budget: number // 0..100
+  experience: Experience
+  /** Dietary + accessibility + concern chip ids (see data.ts NEEDS_GROUPS). */
+  needs: string[]
   prep: number // 0..3
 }
 
@@ -136,8 +148,24 @@ export const DEFAULT_ANSWERS: TripAnswers = {
   durationDays: 14,
   travelers: 'solo',
   tripTypes: ['culture', 'food', 'city'],
+  pace: 'balanced',
   budget: 55,
+  experience: 'some',
+  needs: [],
   prep: 1,
+}
+
+/** Merge a partial/legacy answers object over the defaults so the rest of the
+    app can assume a full shape. Cached sessions written before the new fields
+    existed rehydrate cleanly through this. */
+export function normalizeAnswers(a?: Partial<TripAnswers> | null): TripAnswers {
+  return {
+    ...DEFAULT_ANSWERS,
+    ...(a ?? {}),
+    // Guard array fields that a malformed/legacy payload could leave undefined.
+    tripTypes: Array.isArray(a?.tripTypes) ? a!.tripTypes : DEFAULT_ANSWERS.tripTypes,
+    needs: Array.isArray(a?.needs) ? a!.needs : DEFAULT_ANSWERS.needs,
+  }
 }
 
 export type CountryMeta = {
@@ -169,8 +197,35 @@ export type TripPlan = {
   phrases: PhraseGroup[]
   emergencyContacts: EmergencyContact[]
   predeparture: PredepartureGroup[]
+  /** Daily budget target, computed by the personalization engine from answers. */
+  budgetTarget?: BudgetTarget
+  /** Human-readable summary of how the answers shaped this plan. */
+  personalization?: Personalization
   /** True when produced by the no-key templated fallback (less rich). */
   isTemplated?: boolean
+}
+
+export type BudgetTarget = {
+  perDayUsd: number
+  tier: string
+  /** Per-day spend expressed in the destination currency, when a rate exists. */
+  localPerDay?: number
+}
+
+export type Personalization = {
+  /** Top interest labels, in weight order. */
+  focus: string[]
+  paceLabel: string
+  budgetTier: string
+  experienceLabel: string
+  /** Dietary labels surfaced in the phrase card (e.g. "Vegetarian"). */
+  dietary: string[]
+  /** Days until departure when exact dates were given. */
+  countdownDays?: number
+  /** One-line "tailored for…" sentence for the dashboard + review screen. */
+  summaryLine: string
+  /** What the sequencing was tuned around (e.g. "booked flights · relaxed pace"). */
+  sequencedFor: string
 }
 
 /* -------------------------------------------------------------------------- */

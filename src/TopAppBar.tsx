@@ -15,12 +15,6 @@ import type { Answers } from './screens/Onboarding'
 
 type Menu = 'trip' | 'profile' | null
 
-function budgetLabel(b: number): string {
-  if (b < 34) return 'Budget-conscious'
-  if (b < 67) return 'Mid-range'
-  return 'Premium'
-}
-
 const PREP_LABELS = ['Just dreaming', 'Picked dates', 'Booked flights', 'Fully booked']
 
 /* Global top app bar — brand signature, persists across the 4 tab screens.
@@ -100,6 +94,7 @@ function TripSheet({
   const plan = usePlan()
   const total = totalSteps(plan)
   const cities = plan.itinerary.cities
+  const pers = plan.personalization
 
   const facts: Array<{ icon: PIcon; label: string; value: string }> = [
     { icon: GlobeHemisphereWest, label: 'Languages', value: plan.languages.slice(0, 2).join(', ') || '—' },
@@ -119,8 +114,12 @@ function TripSheet({
         <TripChip>{plan.itinerary.dateRange}</TripChip>
         {answers && <TripChip>{answers.durationDays} days</TripChip>}
         {answers && <TripChip className="capitalize">{answers.travelers}</TripChip>}
-        {answers && <TripChip>{budgetLabel(answers.budget)}</TripChip>}
+        {pers?.focus.map((f) => <TripChip key={f}>{f}</TripChip>)}
+        {pers && <TripChip>{pers.paceLabel} pace</TripChip>}
+        {plan.budgetTarget && <TripChip>~${plan.budgetTarget.perDayUsd}/day</TripChip>}
+        {pers && <TripChip>{pers.experienceLabel}</TripChip>}
         {answers && <TripChip>{PREP_LABELS[answers.prep] ?? 'Planning'}</TripChip>}
+        {pers?.dietary.map((d) => <TripChip key={d}>{d}</TripChip>)}
       </div>
 
       {/* Route */}

@@ -1,53 +1,80 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  AirplaneTilt,
   ArrowLeft,
   ArrowRight,
-  CalendarBlank,
+  Bank,
+  BookOpen,
+  Buildings,
   CalendarDots,
   CheckCircle,
   Compass,
   ForkKnife,
-  HourglassMedium,
-  Mountains,
-  Buildings,
-  BowlFood,
-  User,
-  UsersFour,
-  UsersThree,
-  Users,
+  GlobeHemisphereWest,
+  Martini,
   MagnifyingGlass,
   Microphone,
   Minus,
+  Mountains,
+  PencilSimple,
   Plus,
+  ShoppingBag,
+  Sparkle,
+  User,
+  Users,
+  UsersFour,
+  UsersThree,
+  Waves,
   X,
 } from '@phosphor-icons/react'
 import {
+  BUDGET_TIERS,
   COUNTRIES,
+  EXPERIENCE_OPTIONS,
   HERO_IMAGE,
+  NEEDS_GROUPS,
   ONBOARDING_BACKGROUNDS,
-  PREP_ANCHORS,
+  ONBOARDING_FLOW,
+  ONBOARDING_PHASES,
+  PACE_OPTIONS,
   TRAVELERS,
   TRIP_TYPES,
+  flowIndex,
+  tripTypeById,
   type ScreenId,
 } from '../data'
 import { flagEmoji, searchCountries } from '../lib/countries'
 import {
+  budgetTier,
+  budgetUsdPerDay,
+  countdownDays,
+  personalizePlan,
+  previewStats,
+  selectBasePlan,
+} from '../lib/personalize'
+import {
   ArrivoMark,
   DestinationImage,
   IconButton,
+  MonthCalendar,
+  PhaseRail,
   Primary,
-  StepBar,
+  Segmented,
 } from '../components'
 
 import type { TripAnswers } from '../lib/plan'
 export type Answers = TripAnswers
 
 const TRIP_ICONS: Record<string, React.ComponentType<{ size?: number; weight?: 'regular' | 'fill' }>> = {
-  Compass,
+  Bank,
   ForkKnife,
   Mountains,
   Buildings,
-  BowlFood,
+  BookOpen,
+  Martini,
+  ShoppingBag,
+  Waves,
+  Compass,
 }
 
 const TRAVELER_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
@@ -57,7 +84,26 @@ const TRAVELER_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
   UsersFour,
 }
 
+const EXPERIENCE_ICONS: Record<string, React.ComponentType<{ size?: number; weight?: 'regular' | 'fill' }>> = {
+  Sparkle,
+  Compass,
+  GlobeHemisphereWest,
+}
+
 /* -------------------------------------------------------------------------- */
+
+/** Phase-rail props for a given question screen, derived from the flow map. */
+function railFor(screen: ScreenId): { phases: readonly string[]; active: number; subProgress: number } {
+  const idx = flowIndex(screen)
+  const phase = ONBOARDING_FLOW[idx]?.phase ?? 0
+  const inPhase = ONBOARDING_FLOW.filter((f) => f.phase === phase)
+  const pos = inPhase.findIndex((f) => f.screen === screen)
+  return {
+    phases: ONBOARDING_PHASES,
+    active: phase,
+    subProgress: (pos + 1) / Math.max(1, inPhase.length),
+  }
+}
 
 export function OnboardingHost({
   screen,
@@ -74,86 +120,70 @@ export function OnboardingHost({
 }) {
   const update = <K extends keyof Answers>(k: K, v: Answers[K]) =>
     setAnswers({ ...answers, [k]: v })
+  const patch = (p: Partial<Answers>) => setAnswers({ ...answers, ...p })
+
+  const idx = flowIndex(screen)
+  const goNext = () => go(ONBOARDING_FLOW[idx + 1]?.screen ?? 'loading')
+  const goBack = () => go(idx > 0 ? ONBOARDING_FLOW[idx - 1].screen : 'splash')
 
   const countryLabel = answers.countryName || 'your destination'
+  // The live preview becomes meaningful once we know the country (phase 0+).
+  const phase = ONBOARDING_FLOW[idx]?.phase ?? 0
+  const preview = phase >= 2 ? <PlanPreviewCard answers={answers} /> : undefined
 
   switch (screen) {
     case 'splash':
-      return <Splash onSignup={() => go('country')} onLogin={onSkip} />
+      return (
+        <Splash
+          onSelectCountry={(code, name) => {
+            setAnswers({ ...answers, countryCode: code, countryName: name })
+            go('date')
+          }}
+          onLogin={onSkip}
+        />
+      )
     case 'country':
       return (
         <CountryStep
           code={answers.countryCode}
           name={answers.countryName}
-          onChange={(code, name) =>
-            setAnswers({ ...answers, countryCode: code, countryName: name })
-          }
+          onChange={(code, name) => patch({ countryCode: code, countryName: name })}
           onBack={() => go('splash')}
-          onNext={() => go('date')}
+          onNext={goNext}
         />
       )
     case 'date':
-      return (
-        <DateStep
-          value={answers.dateMode}
-          onChange={(v) => update('dateMode', v)}
-          onBack={() => go('splash')}
-          onNext={() => go('duration')}
-          step={0}
-        />
-      )
+      return <WhenStep answers={answers} onPatch={patch} onBack={goBack} onNext={goNext} onSkip={goNext} />
     case 'duration':
       return (
-        <Duration
-          value={answers.durationDays}
-          onChange={(v) => update('durationDays', v)}
-          onBack={() => go('date')}
-          onNext={() => go('travelers')}
-          step={1}
-        />
+        <Duration value={answers.durationDays} onChange={(v) => update('durationDays', v)} onBack={goBack} onNext={goNext} />
       )
     case 'travelers':
+      return <Travelers answers={answers} onPatch={patch} onBack={goBack} onNext={goNext} onSkip={goNext} />
+    case 'interests':
       return (
-        <Travelers
-          value={answers.travelers}
-          onChange={(v) => update('travelers', v)}
-          onBack={() => go('duration')}
-          onNext={() => go('tripType')}
-          step={2}
-        />
-      )
-    case 'tripType':
-      return (
-        <TripType
+        <Interests
           value={answers.tripTypes}
           onChange={(v) => update('tripTypes', v)}
-          onBack={() => go('travelers')}
-          onNext={() => go('budget')}
-          step={3}
+          onBack={goBack}
+          onNext={goNext}
+          onSkip={goNext}
           country={countryLabel}
+          preview={preview}
         />
+      )
+    case 'pace':
+      return (
+        <PaceStep value={answers.pace} onChange={(v) => update('pace', v)} onBack={goBack} onNext={goNext} onSkip={goNext} preview={preview} />
       )
     case 'budget':
       return (
-        <Budget
-          value={answers.budget}
-          onChange={(v) => update('budget', v)}
-          onBack={() => go('tripType')}
-          onNext={() => go('preparedness')}
-          step={4}
-        />
+        <Budget value={answers.budget} durationDays={answers.durationDays} onChange={(v) => update('budget', v)} onBack={goBack} onNext={goNext} onSkip={goNext} preview={preview} />
       )
-    case 'preparedness':
-      return (
-        <Preparedness
-          value={answers.prep}
-          onChange={(v) => update('prep', v)}
-          onBack={() => go('budget')}
-          onNext={() => go('loading')}
-          step={5}
-          country={countryLabel}
-        />
-      )
+    case 'profile':
+      return <Profile answers={answers} onPatch={patch} onBack={goBack} onNext={goNext} onSkip={goNext} preview={preview} />
+    case 'review':
+      return <Review answers={answers} go={go} onBack={goBack} onGenerate={goNext} />
     default:
       return null
   }
@@ -163,23 +193,34 @@ export function OnboardingHost({
 /*  Splash                                                                    */
 /* -------------------------------------------------------------------------- */
 
+/* The splash search IS the destination picker. Idle, it's a cinematic brand
+   moment; on focus it fluidly collapses the lockup and reveals live country
+   results. Choosing a country sets it and slides on to the When step — no
+   separate "where are we going" screen. */
 function Splash({
-  onSignup,
+  onSelectCountry,
   onLogin,
 }: {
-  onSignup: () => void
+  onSelectCountry: (code: string, name: string) => void
   onLogin?: () => void
 }) {
+  const [query, setQuery] = useState('')
+  const [active, setActive] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const results = query.trim() ? searchCountries(query, 8) : []
+
+  const cancel = () => {
+    setQuery('')
+    setActive(false)
+    inputRef.current?.blur()
+  }
+
   return (
     <div className="relative h-full w-full overflow-hidden bg-ink no-select">
-      {/* Warm Venice sunset — animated subtle pan. Self-healing: a rotted or
-          offline source degrades to the branded gradient, never a broken icon. */}
       <DestinationImage
         src={HERO_IMAGE}
         className="animate-hero-pan absolute inset-0 h-full w-full object-cover"
       />
-
-      {/* Heavy cool wash. Deeper across the whole frame, darkest at the CTAs. */}
       <div
         className="absolute inset-0"
         style={{
@@ -187,51 +228,142 @@ function Splash({
             'linear-gradient(180deg, rgba(14,21,32,0.48) 0%, rgba(14,21,32,0.62) 28%, rgba(14,21,32,0.78) 56%, rgba(14,21,32,0.92) 82%, rgba(14,21,32,0.98) 100%)',
         }}
       />
-      {/* Subtle flat tint baseline so even the brightest pixels stay restrained */}
       <div className="absolute inset-0 bg-ink/30" />
 
-      <div className="relative flex h-full w-full flex-col px-6 pb-0 pt-[88px]">
-        <div className="flex-[0.55]" />
-
-        {/* Vertical rectangular brand lockup — hero composition */}
-        <div className="flex flex-col items-center fade-up">
-          <ArrivoMark size={140} variant="silver" />
-          <span className="-mt-7 font-display text-[52px] font-semibold leading-none tracking-[-0.035em] text-mist">
+      <div className="relative flex h-full w-full flex-col px-6 pb-8 pt-[76px]">
+        {/* Brand lockup — full hero when idle, collapses up when searching */}
+        <div
+          className={`flex shrink-0 flex-col items-center transition-[padding] duration-[600ms] ease-[var(--ease-out-expo)] ${
+            active ? 'pt-1' : 'pt-[24vh]'
+          }`}
+        >
+          <ArrivoMark
+            size={active ? 54 : 132}
+            variant="silver"
+            className="transition-[width,height] duration-[600ms] ease-[var(--ease-out-expo)]"
+          />
+          <span
+            className={`overflow-hidden font-display text-[48px] font-semibold leading-none tracking-[-0.035em] text-mist transition-all duration-[500ms] ease-[var(--ease-out-expo)] ${
+              active ? 'mt-0 max-h-0 opacity-0' : '-mt-6 max-h-[64px] opacity-100'
+            }`}
+          >
             Arrivo
           </span>
         </div>
 
-        {/* Glass search field — primary action, kicks off the sign-up flow */}
-        <button
-          onClick={onSignup}
-          aria-label="Enter — start your trip"
-          className="glass tappable mt-8 flex h-[52px] w-full items-center gap-3 rounded-full pl-5 pr-2 fade-up"
-          style={{ animationDelay: '160ms' }}
-        >
-          <MagnifyingGlass size={16} className="text-smoke" />
-          <span className="flex-1 text-left text-[14px] text-smoke">Enter</span>
-          <span
-            aria-hidden
-            className="flex h-9 w-9 items-center justify-center rounded-full text-fog"
-          >
-            <Microphone size={16} />
-          </span>
-        </button>
-
-        <div className="flex-1" />
-
-        {/* Returning-user path */}
-        <div
-          className="fade-up pb-6"
-          style={{ animationDelay: '400ms' }}
-        >
-          <button
-            onClick={onLogin}
-            className="glass-strong tappable inline-flex h-[58px] w-full items-center justify-center rounded-full border border-white/[0.10] text-[14.5px] font-semibold tracking-[0.04em] text-mist transition-colors hover:bg-white/[0.06]"
-          >
-            Log in
-          </button>
+        {/* Real destination search */}
+        <div className={`shrink-0 transition-[margin] duration-500 ${active ? 'mt-5' : 'mt-9'}`}>
+          <div className="glass flex h-[52px] w-full items-center gap-3 rounded-full pl-5 pr-2">
+            <MagnifyingGlass size={17} className="shrink-0 text-smoke" />
+            <input
+              ref={inputRef}
+              value={query}
+              onFocus={() => setActive(true)}
+              onClick={() => setActive(true)}
+              onChange={(e) => {
+                setActive(true)
+                setQuery(e.target.value)
+              }}
+              placeholder="Where are you going?"
+              aria-label="Search a destination country"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              className="min-w-0 flex-1 bg-transparent text-[15px] text-mist outline-none placeholder:text-smoke"
+            />
+            {active ? (
+              <button
+                onClick={cancel}
+                aria-label="Cancel search"
+                className="tappable flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-fog"
+              >
+                <X size={15} weight="bold" />
+              </button>
+            ) : (
+              <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-fog">
+                <Microphone size={16} />
+              </span>
+            )}
+          </div>
         </div>
+
+        {/* Results / popular destinations — revealed while searching */}
+        {active && (
+          <div className="scroll-area mt-4 flex-1 overflow-y-auto fade-up">
+            {results.length > 0 ? (
+              <ul className="space-y-2">
+                {results.map((c) => (
+                  <li key={c.code}>
+                    <button
+                      onClick={() => onSelectCountry(c.code, c.name)}
+                      className="tappable border-trans flex w-full items-center gap-3.5 rounded-2xl border border-white/[0.08] bg-slate/40 p-3.5 text-left backdrop-blur-xl hover:border-steel-soft/70"
+                    >
+                      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.07] text-[22px] leading-none">
+                        {flagEmoji(c.code)}
+                      </span>
+                      <span className="min-w-0 flex-1 text-[16px] font-semibold text-mist">{c.name}</span>
+                      <ArrowRight size={16} className="shrink-0 text-smoke" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : query.trim() ? (
+              <div className="rounded-2xl border border-white/[0.08] bg-slate/40 p-5 text-center text-[14px] text-fog backdrop-blur-xl">
+                No match for “{query.trim()}”. Try the country’s English name.
+              </div>
+            ) : (
+              <>
+                <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-smoke">
+                  Popular right now
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {COUNTRIES.map((c) => (
+                    <button
+                      key={c.code}
+                      onClick={() => onSelectCountry(c.code, c.name)}
+                      className="tappable border-trans relative aspect-[4/5] overflow-hidden rounded-2xl border border-white/[0.08]"
+                    >
+                      <DestinationImage
+                        src={c.image}
+                        query={`${c.city} ${c.name} travel`}
+                        place={c.city}
+                        className="absolute inset-0 h-full w-full object-cover"
+                      />
+                      <div
+                        className="absolute inset-0"
+                        style={{
+                          background:
+                            'linear-gradient(180deg, rgba(14,21,32,0.05) 0%, rgba(14,21,32,0.45) 55%, rgba(14,21,32,0.92) 100%)',
+                        }}
+                      />
+                      <div className="absolute inset-x-3 bottom-3">
+                        <div className="font-display text-[18px] font-semibold leading-tight text-mist">
+                          {c.name}
+                        </div>
+                        <div className="text-[12px] text-fog/85">{c.city}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Idle footer — brand breathing room + returning user */}
+        {!active && (
+          <>
+            <div className="flex-1" />
+            <div className="fade-up" style={{ animationDelay: '300ms' }}>
+              <button
+                onClick={onLogin}
+                className="glass-strong tappable inline-flex h-[58px] w-full items-center justify-center rounded-full border border-white/[0.10] text-[14.5px] font-semibold tracking-[0.04em] text-mist transition-colors hover:bg-white/[0.06]"
+              >
+                Log in
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
@@ -257,13 +389,13 @@ function CountryStep({
   const [query, setQuery] = useState('')
   const results = query.trim() ? searchCountries(query, 8) : []
   const hasSelection = Boolean(code)
+  const rail = railFor('country')
 
   return (
     <div className="slide-in relative flex h-full w-full flex-col overflow-hidden bg-ink no-select">
-      {/* Atmospheric background */}
       <div aria-hidden className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
         <DestinationImage
-          src={ONBOARDING_BACKGROUNDS.tripType}
+          src={ONBOARDING_BACKGROUNDS.interests}
           className="h-full w-full scale-110 object-cover opacity-[0.30] blur-[3px]"
         />
         <div
@@ -276,7 +408,6 @@ function CountryStep({
       </div>
 
       <div className="relative z-10 flex h-full w-full flex-col px-6 pb-8 pt-[80px]">
-        {/* Top bar */}
         <div className="flex items-center justify-between">
           <IconButton onClick={onBack} ariaLabel="Back">
             <ArrowLeft size={18} />
@@ -287,17 +418,16 @@ function CountryStep({
           <div className="h-11 w-11" />
         </div>
 
-        {/* Heading */}
+        <div className="mt-5">
+          <PhaseRail {...rail} />
+        </div>
+
         <div className="mt-7">
           <h2 className="font-display text-[34px] font-bold leading-[40px] tracking-[-0.015em] text-mist">
             Where are we going?
           </h2>
-          <p className="mt-2.5 text-[15px] leading-[22px] text-fog/90">
-            Search any country — Arrivo builds the readiness plan around it.
-          </p>
         </div>
 
-        {/* Search field */}
         <div className="mt-6">
           <div className="glass-light flex h-[52px] items-center gap-3 rounded-xl px-4">
             <MagnifyingGlass size={18} className="text-smoke" />
@@ -322,7 +452,6 @@ function CountryStep({
           </div>
         </div>
 
-        {/* Body */}
         <div className="scroll-area mt-5 flex-1 overflow-y-auto">
           {results.length > 0 ? (
             <ul className="space-y-2">
@@ -333,17 +462,13 @@ function CountryStep({
                     <button
                       onClick={() => onChange(c.code, c.name)}
                       className={`tappable border-trans flex w-full items-center gap-3.5 rounded-2xl border p-3.5 text-left backdrop-blur-xl ${
-                        selected
-                          ? 'border-steel-soft bg-slate-2/80'
-                          : 'border-white/[0.08] bg-slate/40'
+                        selected ? 'border-steel-soft bg-slate-2/80' : 'border-white/[0.08] bg-slate/40'
                       }`}
                     >
                       <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.07] text-[22px] leading-none">
                         {flagEmoji(c.code)}
                       </span>
-                      <span className="flex-1 text-[16px] font-semibold text-mist">
-                        {c.name}
-                      </span>
+                      <span className="flex-1 text-[16px] font-semibold text-mist">{c.name}</span>
                       {selected ? (
                         <CheckCircle size={20} weight="fill" className="text-mist" />
                       ) : (
@@ -406,7 +531,6 @@ function CountryStep({
           )}
         </div>
 
-        {/* Footer */}
         <div className="pt-4">
           {hasSelection && (
             <div className="mb-3 flex items-center justify-center gap-2 text-[12.5px] text-fog">
@@ -428,38 +552,37 @@ function CountryStep({
 /* -------------------------------------------------------------------------- */
 
 function QuestionFrame({
-  step,
-  total = 6,
+  screen,
   title,
   subtitle,
+  why,
   onBack,
   onNext,
   onSkip,
   nextLabel = 'Continue',
   disabled,
   children,
+  preview,
   backgroundImage,
 }: {
-  step: number
-  total?: number
+  screen: ScreenId
   title: React.ReactNode
   subtitle?: React.ReactNode
+  why?: React.ReactNode
   onBack?: () => void
   onNext: () => void
   onSkip?: () => void
   nextLabel?: string
   disabled?: boolean
   children: React.ReactNode
+  preview?: React.ReactNode
   backgroundImage?: string
 }) {
+  const rail = railFor(screen)
   return (
     <div className="slide-in relative flex h-full w-full flex-col overflow-hidden bg-ink no-select">
-      {/* Atmospheric background — blurred & dimmed photography */}
       {backgroundImage && (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
-        >
+        <div aria-hidden className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
           <DestinationImage
             src={backgroundImage}
             className="h-full w-full scale-110 object-cover opacity-[0.35] blur-[3px]"
@@ -475,38 +598,37 @@ function QuestionFrame({
       )}
 
       <div className="relative z-10 flex h-full w-full flex-col px-6 pb-8 pt-[80px]">
-        {/* Top bar */}
         <div className="flex items-center justify-between">
           <IconButton onClick={onBack} ariaLabel="Back">
             <ArrowLeft size={18} />
           </IconButton>
           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-smoke">
-            Step {step + 1} of {total}
+            {ONBOARDING_PHASES[rail.active]}
           </div>
           <div className="h-11 w-11" />
         </div>
 
         <div className="mt-5">
-          <StepBar step={step} total={total} />
+          <PhaseRail {...rail} />
         </div>
 
-        {/* Heading */}
         <div className="mt-8">
           <h2 className="font-display text-[34px] font-bold leading-[40px] tracking-[-0.015em] text-mist">
             {title}
           </h2>
-          {subtitle && (
-            <p className="mt-2.5 text-[15px] leading-[22px] text-fog/90">
-              {subtitle}
+          {subtitle && <p className="mt-2.5 text-[15px] leading-[22px] text-fog/90">{subtitle}</p>}
+          {why && (
+            <p className="mt-2 text-[12.5px] leading-[18px] text-smoke">
+              {why}
             </p>
           )}
         </div>
 
-        {/* Body */}
         <div className="scroll-area mt-7 flex-1 overflow-y-auto">{children}</div>
 
-        {/* Footer: primary + optional skip */}
-        <div className="pt-6">
+        {preview && <div className="pt-3">{preview}</div>}
+
+        <div className="pt-5">
           <Primary disabled={disabled} onClick={onNext}>
             {nextLabel} <ArrowRight size={18} weight="bold" />
           </Primary>
@@ -527,68 +649,96 @@ function QuestionFrame({
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Date                                                                      */
+/*  Live preview mini-card — appears from the Style phase onward               */
 /* -------------------------------------------------------------------------- */
 
-function DateStep({
-  value,
-  onChange,
+function PlanPreviewCard({ answers }: { answers: Answers }) {
+  const stats = useMemo(() => previewStats(answers), [answers])
+  if (!stats) return null
+  return (
+    <div className="glass scale-in flex items-center gap-3 rounded-2xl px-4 py-3 shadow-card">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-smoke">
+          <Sparkle size={11} weight="fill" className="text-steel-soft" />
+          Your plan so far
+        </div>
+        <div className="mt-1 flex items-baseline gap-3">
+          <span className="font-display text-[18px] font-bold leading-none tabular-nums text-mist">
+            {stats.briefings}
+            <span className="ml-1 text-[11px] font-medium text-smoke">briefings</span>
+          </span>
+          <span className="font-display text-[18px] font-bold leading-none tabular-nums text-mist">
+            ~${stats.perDayUsd}
+            <span className="ml-1 text-[11px] font-medium text-smoke">/day</span>
+          </span>
+        </div>
+      </div>
+      {stats.focus.length > 0 && (
+        <div className="max-w-[40%] text-right text-[11px] leading-[15px] text-fog">
+          <div className="text-[10px] uppercase tracking-[0.12em] text-smoke">Focus</div>
+          <div className="truncate font-semibold text-mist">{stats.focus.slice(0, 2).join(' · ')}</div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/*  When — planning stage + exact dates                                       */
+/* -------------------------------------------------------------------------- */
+
+const PLANNING_STAGES: Array<{
+  prep: number
+  dateMode: Answers['dateMode']
+  label: string
+  sub: string
+  icon: React.ReactNode
+}> = [
+  { prep: 0, dateMode: 'flexible', label: 'Just dreaming', sub: 'No dates yet', icon: <Sparkle size={22} /> },
+  { prep: 1, dateMode: 'exact', label: 'Picked dates', sub: 'I know when I’m going', icon: <CalendarDots size={22} /> },
+  { prep: 2, dateMode: 'exact', label: 'Booked flights', sub: 'Dates are locked in', icon: <AirplaneTilt size={22} /> },
+  { prep: 3, dateMode: 'exact', label: 'Fully booked', sub: 'Flights and stay sorted', icon: <CheckCircle size={22} /> },
+]
+
+function WhenStep({
+  answers,
+  onPatch,
   onBack,
   onNext,
-  step,
+  onSkip,
 }: {
-  value: 'exact' | 'flexible' | 'within3'
-  onChange: (v: 'exact' | 'flexible' | 'within3') => void
+  answers: Answers
+  onPatch: (p: Partial<Answers>) => void
   onBack: () => void
   onNext: () => void
-  step: number
+  onSkip: () => void
 }) {
-  const opts: Array<{
-    id: 'exact' | 'flexible' | 'within3'
-    label: string
-    sub: string
-    icon: React.ReactNode
-  }> = [
-    {
-      id: 'exact',
-      label: 'Exact dates',
-      sub: 'I know when I’m flying.',
-      icon: <CalendarDots size={22} />,
-    },
-    {
-      id: 'flexible',
-      label: 'Flexible',
-      sub: 'I have a window in mind.',
-      icon: <CalendarBlank size={22} />,
-    },
-    {
-      id: 'within3',
-      label: 'Within 3 months',
-      sub: 'Soon, but no exact dates yet.',
-      icon: <HourglassMedium size={22} />,
-    },
-  ]
+  const days = countdownDays(answers)
   return (
     <QuestionFrame
-      step={step}
+      screen="date"
       title="When are you going?"
-      subtitle="We sequence your tasks based on how soon you fly."
       onBack={onBack}
       onNext={onNext}
-      onSkip={onNext}
+      onSkip={onSkip}
       backgroundImage={ONBOARDING_BACKGROUNDS.date}
     >
       <div className="space-y-3">
-        {opts.map((o) => {
-          const selected = o.id === value
+        {PLANNING_STAGES.map((s) => {
+          const selected = answers.prep === s.prep
           return (
             <button
-              key={o.id}
-              onClick={() => onChange(o.id)}
+              key={s.prep}
+              onClick={() =>
+                onPatch({
+                  prep: s.prep,
+                  dateMode: s.dateMode,
+                  // Drop a stale start date if they fall back to "dreaming".
+                  startDate: s.prep >= 1 ? answers.startDate : undefined,
+                })
+              }
               className={`tappable border-trans flex w-full items-center gap-4 rounded-2xl border p-4 text-left backdrop-blur-xl ${
-                selected
-                  ? 'border-steel-soft bg-slate-2/80'
-                  : 'border-white/[0.08] bg-slate/40'
+                selected ? 'border-steel-soft bg-slate-2/80' : 'border-white/[0.08] bg-slate/40'
               }`}
             >
               <div
@@ -596,13 +746,11 @@ function DateStep({
                   selected ? 'bg-mist text-ink' : 'bg-white/[0.07] text-fog'
                 }`}
               >
-                {o.icon}
+                {s.icon}
               </div>
               <div className="flex-1">
-                <div className="text-[16px] font-semibold text-mist">
-                  {o.label}
-                </div>
-                <div className="text-[13px] text-fog">{o.sub}</div>
+                <div className="text-[16px] font-semibold text-mist">{s.label}</div>
+                <div className="text-[13px] text-fog">{s.sub}</div>
               </div>
               {selected ? (
                 <CheckCircle size={20} weight="fill" className="text-mist" />
@@ -613,12 +761,51 @@ function DateStep({
           )
         })}
       </div>
+
+      {/* Flexible travelers can still flag a rough window. */}
+      {answers.prep === 0 && (
+        <button
+          onClick={() => onPatch({ dateMode: answers.dateMode === 'within3' ? 'flexible' : 'within3' })}
+          className={`tappable border-trans mt-3 flex w-full items-center justify-between rounded-2xl border p-4 text-left backdrop-blur-xl ${
+            answers.dateMode === 'within3' ? 'border-steel-soft bg-slate-2/80' : 'border-white/[0.08] bg-slate/40'
+          }`}
+        >
+          <span className="text-[14px] font-medium text-fog">Likely within the next 3 months</span>
+          <span
+            className={`flex h-5 w-5 items-center justify-center rounded-md border ${
+              answers.dateMode === 'within3' ? 'border-mist bg-mist text-ink' : 'border-border-default'
+            }`}
+          >
+            {answers.dateMode === 'within3' && <CheckCircle size={14} weight="fill" />}
+          </span>
+        </button>
+      )}
+
+      {/* Exact date picker for anyone past the dreaming stage. */}
+      {answers.prep >= 1 && (
+        <div className="mt-4 fade-up">
+          <div className="mb-2 flex items-center justify-between">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-smoke">
+              Departure date
+            </div>
+            {days != null && (
+              <div className="text-[12px] font-semibold text-steel-soft">
+                {days === 0 ? 'Today' : `${days} days to go`}
+              </div>
+            )}
+          </div>
+          <MonthCalendar
+            value={answers.startDate}
+            onChange={(iso) => onPatch({ startDate: iso, dateMode: 'exact' })}
+          />
+        </div>
+      )}
     </QuestionFrame>
   )
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Slider                                                                    */
+/*  Slider (shared)                                                           */
 /* -------------------------------------------------------------------------- */
 
 function Slider({
@@ -664,6 +851,10 @@ function Slider({
   )
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Duration                                                                  */
+/* -------------------------------------------------------------------------- */
+
 const DURATION_PRESETS: Array<{ days: number; label: string }> = [
   { days: 7, label: '1 week' },
   { days: 10, label: '10 days' },
@@ -671,8 +862,6 @@ const DURATION_PRESETS: Array<{ days: number; label: string }> = [
   { days: 21, label: '3 weeks' },
 ]
 
-// 7-day floor reflects reality: a US→China trip burns ~3 days on flights and
-// jet lag, so anything shorter can't be sequenced into a meaningful plan.
 const DURATION_MIN = 7
 const DURATION_MAX = 90
 const SLIDER_MAX = 45
@@ -682,13 +871,11 @@ function Duration({
   onChange,
   onBack,
   onNext,
-  step,
 }: {
   value: number
   onChange: (v: number) => void
   onBack: () => void
   onNext: () => void
-  step: number
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(String(value))
@@ -700,7 +887,6 @@ function Duration({
   const startEdit = () => {
     setDraft(String(value))
     setEditing(true)
-    // Defer focus + select to after render
     requestAnimationFrame(() => {
       inputRef.current?.focus()
       inputRef.current?.select()
@@ -719,14 +905,12 @@ function Duration({
 
   return (
     <QuestionFrame
-      step={step}
+      screen="duration"
       title="For how long?"
-      subtitle="Your readiness plan adapts to fit your timeline."
       onBack={onBack}
       onNext={onNext}
       backgroundImage={ONBOARDING_BACKGROUNDS.duration}
     >
-      {/* Counter card */}
       <div className="rounded-3xl border border-white/[0.08] bg-slate/40 p-6 shadow-card backdrop-blur-xl">
         <div className="flex items-center justify-center gap-5">
           <NudgeButton
@@ -736,11 +920,7 @@ function Duration({
             disabled={value <= DURATION_MIN}
           />
 
-          <button
-            type="button"
-            onClick={startEdit}
-            className="tappable group flex flex-col items-center px-2"
-          >
+          <button type="button" onClick={startEdit} className="tappable group flex flex-col items-center px-2">
             {editing ? (
               <input
                 ref={inputRef}
@@ -748,9 +928,7 @@ function Duration({
                 inputMode="numeric"
                 pattern="[0-9]*"
                 value={draft}
-                onChange={(e) =>
-                  setDraft(e.target.value.replace(/\D/g, '').slice(0, 3))
-                }
+                onChange={(e) => setDraft(e.target.value.replace(/\D/g, '').slice(0, 3))}
                 onBlur={commitEdit}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
@@ -773,11 +951,7 @@ function Duration({
             <span className="mt-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-smoke">
               Days
               <span className="ml-1.5 inline-block text-[10px] tracking-[0.04em] text-fog/50 transition-opacity group-hover:text-fog">
-                {editing
-                  ? ''
-                  : value <= DURATION_MIN
-                    ? `· min ${DURATION_MIN}`
-                    : '· tap to edit'}
+                {editing ? '' : value <= DURATION_MIN ? `· min ${DURATION_MIN}` : '· tap to edit'}
               </span>
             </span>
           </button>
@@ -790,15 +964,8 @@ function Duration({
           />
         </div>
 
-        {/* Slider */}
         <div className="mt-7">
-          <Slider
-            value={sliderValue}
-            min={DURATION_MIN}
-            max={SLIDER_MAX}
-            onChange={onChange}
-            ariaLabel="Trip length in days"
-          />
+          <Slider value={sliderValue} min={DURATION_MIN} max={SLIDER_MAX} onChange={onChange} ariaLabel="Trip length in days" />
           <div className="mt-1.5 flex justify-between text-[11px] font-medium text-smoke">
             <span>1 week</span>
             <span>2 weeks</span>
@@ -807,7 +974,6 @@ function Duration({
         </div>
       </div>
 
-      {/* Preset chips */}
       <div className="mt-4 grid grid-cols-4 gap-2">
         {DURATION_PRESETS.map((p) => {
           const selected = value === p.days
@@ -816,9 +982,7 @@ function Duration({
               key={p.days}
               onClick={() => onChange(p.days)}
               className={`tappable border-trans inline-flex h-10 items-center justify-center rounded-xl border px-1 text-[12.5px] font-semibold backdrop-blur-xl ${
-                selected
-                  ? 'border-steel-soft bg-slate-2/80 text-mist'
-                  : 'border-white/[0.08] bg-slate/40 text-fog'
+                selected ? 'border-steel-soft bg-slate-2/80 text-mist' : 'border-white/[0.08] bg-slate/40 text-fog'
               }`}
             >
               {p.label}
@@ -826,7 +990,6 @@ function Duration({
           )
         })}
       </div>
-
     </QuestionFrame>
   )
 }
@@ -855,28 +1018,34 @@ function NudgeButton({
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Travelers (+ optional party size)                                         */
+/* -------------------------------------------------------------------------- */
 
 function Travelers({
-  value,
-  onChange,
+  answers,
+  onPatch,
   onBack,
   onNext,
-  step,
+  onSkip,
 }: {
-  value: string
-  onChange: (v: string) => void
+  answers: Answers
+  onPatch: (p: Partial<Answers>) => void
   onBack: () => void
   onNext: () => void
-  step: number
+  onSkip: () => void
 }) {
+  const value = answers.travelers
+  const showCount = value === 'couple' || value === 'family' || value === 'group'
+  const minCount = value === 'group' ? 3 : 2
+  const count = answers.partySize ?? (value === 'couple' ? 2 : value === 'family' ? 3 : 4)
+
   return (
     <QuestionFrame
-      step={step}
+      screen="travelers"
       title="Who’s traveling?"
-      subtitle="Group size shapes hotels, transport, and pacing."
       onBack={onBack}
       onNext={onNext}
-      onSkip={onNext}
+      onSkip={onSkip}
       backgroundImage={ONBOARDING_BACKGROUNDS.travelers}
     >
       <div className="grid grid-cols-2 gap-3">
@@ -886,126 +1055,215 @@ function Travelers({
           return (
             <button
               key={t.id}
-              onClick={() => onChange(t.id)}
+              onClick={() =>
+                onPatch({ travelers: t.id, partySize: t.id === 'solo' ? 1 : undefined })
+              }
               className={`tappable border-trans flex aspect-square flex-col justify-between rounded-2xl border p-4 text-left backdrop-blur-xl ${
-                selected
-                  ? 'border-steel-soft bg-slate-2/80'
-                  : 'border-white/[0.08] bg-slate/40'
+                selected ? 'border-steel-soft bg-slate-2/80' : 'border-white/[0.08] bg-slate/40'
               }`}
             >
               <div className="flex items-center justify-between">
-                <div
-                  className={`flex h-11 w-11 items-center justify-center rounded-full ${
-                    selected ? 'bg-mist text-ink' : 'bg-white/[0.07] text-fog'
-                  }`}
-                >
+                <div className={`flex h-11 w-11 items-center justify-center rounded-full ${selected ? 'bg-mist text-ink' : 'bg-white/[0.07] text-fog'}`}>
                   <Icon size={22} />
                 </div>
-                {selected && (
-                  <CheckCircle size={20} weight="fill" className="text-mist" />
-                )}
+                {selected && <CheckCircle size={20} weight="fill" className="text-mist" />}
               </div>
               <div>
-                <div className="text-[18px] font-semibold text-mist">
-                  {t.label}
-                </div>
+                <div className="text-[18px] font-semibold text-mist">{t.label}</div>
                 <div className="text-[13px] text-fog">{t.sub}</div>
               </div>
             </button>
           )
         })}
       </div>
+
+      {showCount && (
+        <div className="fade-up mt-4 flex items-center justify-between rounded-2xl border border-white/[0.08] bg-slate/40 px-5 py-4 backdrop-blur-xl">
+          <div className="text-[14px] font-medium text-fog">How many of you?</div>
+          <div className="flex items-center gap-4">
+            <NudgeButton
+              icon={<Minus size={16} weight="bold" />}
+              ariaLabel="Fewer travelers"
+              onClick={() => onPatch({ partySize: Math.max(minCount, count - 1) })}
+              disabled={count <= minCount}
+            />
+            <span className="w-7 text-center font-display text-[22px] font-bold tabular-nums text-mist">{count}</span>
+            <NudgeButton
+              icon={<Plus size={16} weight="bold" />}
+              ariaLabel="More travelers"
+              onClick={() => onPatch({ partySize: Math.min(12, count + 1) })}
+              disabled={count >= 12}
+            />
+          </div>
+        </div>
+      )}
     </QuestionFrame>
   )
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Interests (weighted by selection order)                                  */
+/* -------------------------------------------------------------------------- */
 
-function TripType({
+function Interests({
   value,
   onChange,
   onBack,
   onNext,
-  step,
+  onSkip,
   country,
+  preview,
 }: {
   value: string[]
   onChange: (v: string[]) => void
   onBack: () => void
   onNext: () => void
-  step: number
+  onSkip: () => void
   country: string
+  preview?: React.ReactNode
 }) {
   const toggle = (id: string) =>
-    onChange(
-      value.includes(id) ? value.filter((v) => v !== id) : [...value, id],
-    )
+    onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id])
+
   return (
     <QuestionFrame
-      step={step}
+      screen="interests"
       title="What kind of trip?"
-      subtitle="Pick a few. We’ll weight your briefings and itinerary."
       onBack={onBack}
       onNext={onNext}
-      onSkip={onNext}
+      onSkip={onSkip}
       disabled={value.length === 0}
-      backgroundImage={ONBOARDING_BACKGROUNDS.tripType}
+      preview={preview}
+      backgroundImage={ONBOARDING_BACKGROUNDS.interests}
     >
-      <div className="flex flex-wrap justify-center gap-2.5 px-2">
+      <div className="flex flex-wrap justify-center gap-2.5 px-1">
         {TRIP_TYPES.map((t) => {
           const Icon = TRIP_ICONS[t.icon] ?? Compass
-          const selected = value.includes(t.id)
+          const rank = value.indexOf(t.id)
+          const selected = rank >= 0
           return (
             <button
               key={t.id}
               onClick={() => toggle(t.id)}
               className={`tappable border-trans flex h-11 items-center gap-2 rounded-full border px-4 text-[14px] font-semibold backdrop-blur-xl ${
-                selected
-                  ? 'border-steel-soft bg-slate-2/80 text-mist'
-                  : 'border-white/[0.08] bg-slate/40 text-fog'
+                selected ? 'border-steel-soft bg-slate-2/80 text-mist' : 'border-white/[0.08] bg-slate/40 text-fog'
               }`}
             >
-              <Icon size={16} weight={selected ? 'fill' : 'regular'} />
+              {selected ? (
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-mist text-[11px] font-bold tabular-nums text-ink">
+                  {rank + 1}
+                </span>
+              ) : (
+                <Icon size={16} weight="regular" />
+              )}
               {t.label}
             </button>
           )
         })}
       </div>
       <div className="mt-6 rounded-2xl border border-white/[0.08] bg-slate/40 p-4 text-[13px] leading-[20px] text-fog backdrop-blur-xl">
-        Tap as many as feel right. We’ll weight your briefings and itinerary for{' '}
-        {country} around them.
+        {value.length === 0
+          ? `Tap as many as feel right. We’ll weight your briefings and itinerary for ${country} around them.`
+          : `Weighting ${country} toward ${value
+              .slice(0, 3)
+              .map((id) => tripTypeById(id)?.label)
+              .filter(Boolean)
+              .join(', ')}.`}
       </div>
     </QuestionFrame>
   )
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Pace                                                                      */
+/* -------------------------------------------------------------------------- */
 
-function Budget({
+function PaceStep({
   value,
   onChange,
   onBack,
   onNext,
-  step,
+  onSkip,
+  preview,
+}: {
+  value: Answers['pace']
+  onChange: (v: Answers['pace']) => void
+  onBack: () => void
+  onNext: () => void
+  onSkip: () => void
+  preview?: React.ReactNode
+}) {
+  const opt = PACE_OPTIONS.find((p) => p.id === value) ?? PACE_OPTIONS[1]
+  return (
+    <QuestionFrame
+      screen="pace"
+      title="What’s your pace?"
+      onBack={onBack}
+      onNext={onNext}
+      onSkip={onSkip}
+      preview={preview}
+      backgroundImage={ONBOARDING_BACKGROUNDS.pace}
+    >
+      <Segmented
+        options={PACE_OPTIONS.map((p) => ({ id: p.id, label: p.label }))}
+        value={value}
+        onChange={onChange}
+        ariaLabel="Trip pace"
+      />
+
+      <div className="mt-5 rounded-3xl border border-white/[0.08] bg-slate/40 p-6 shadow-card backdrop-blur-xl">
+        <div className="font-display text-[20px] font-semibold text-mist">{opt.label}</div>
+        <div className="mt-1 text-[14px] leading-[20px] text-fog">{opt.sub}</div>
+        <div className="mt-4 flex items-center gap-1.5" aria-hidden>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <span
+              key={i}
+              className={`h-2.5 flex-1 rounded-full ${i < opt.blocksPerDay ? 'bg-steel-soft' : 'bg-border-default'}`}
+            />
+          ))}
+        </div>
+        <div className="mt-2 text-[11px] font-medium uppercase tracking-[0.14em] text-smoke">
+          ≈ {opt.blocksPerDay} stops per day
+        </div>
+      </div>
+    </QuestionFrame>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Budget                                                                    */
+/* -------------------------------------------------------------------------- */
+
+function Budget({
+  value,
+  durationDays,
+  onChange,
+  onBack,
+  onNext,
+  onSkip,
+  preview,
 }: {
   value: number
+  durationDays: number
   onChange: (v: number) => void
   onBack: () => void
   onNext: () => void
-  step: number
+  onSkip: () => void
+  preview?: React.ReactNode
 }) {
-  // map 0..100 → daily USD 80..600
-  const usd = Math.round(80 + (value / 100) * 520)
-  const tier =
-    value < 30 ? 'Budget' : value < 65 ? 'Mid-range' : value < 90 ? 'Comfort' : 'Premium'
+  const usd = budgetUsdPerDay(value)
+  const tier = budgetTier(value)
+  const days = Math.max(1, durationDays)
+  const total = usd * days
+  const activeTier = BUDGET_TIERS.find((t) => t.id === tier)
   return (
     <QuestionFrame
-      step={step}
+      screen="budget"
       title="What’s your budget range?"
-      subtitle="A rough daily target. You can change this later."
       onBack={onBack}
       onNext={onNext}
-      onSkip={onNext}
+      onSkip={onSkip}
+      preview={preview}
       backgroundImage={ONBOARDING_BACKGROUNDS.budget}
     >
       <div className="rounded-3xl border border-white/[0.08] bg-slate/40 p-6 shadow-card backdrop-blur-xl">
@@ -1015,9 +1273,7 @@ function Budget({
               ~${usd}
               <span className="ml-1 text-[16px] font-medium text-fog">/day</span>
             </div>
-            <div className="mt-1.5 text-[12px] font-semibold uppercase tracking-[0.14em] text-smoke">
-              {tier}
-            </div>
+            <div className="mt-1.5 text-[12px] font-semibold uppercase tracking-[0.14em] text-smoke">{tier}</div>
           </div>
           <div className="text-right text-[12px] text-smoke">
             Per person
@@ -1025,18 +1281,142 @@ function Budget({
           </div>
         </div>
         <div className="mt-7">
-          <Slider
-            value={value}
-            min={0}
-            max={100}
-            onChange={onChange}
-            ariaLabel="Daily budget"
-          />
-          <div className="mt-1 flex justify-between text-[12px] text-smoke">
-            <span>Budget</span>
-            <span>Mid</span>
-            <span>Premium</span>
+          <Slider value={value} min={0} max={100} onChange={onChange} ariaLabel="Daily budget" />
+        </div>
+
+        {/* Estimated trip total — the number travelers actually plan against */}
+        <div className="mt-6 flex items-end justify-between border-t border-white/[0.08] pt-4">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-smoke">
+              Est. trip total
+            </div>
+            <div className="mt-1 font-display text-[22px] font-bold leading-none tracking-[-0.01em] text-mist">
+              ≈ ${total.toLocaleString('en-US')}
+            </div>
           </div>
+          <div className="text-right text-[12px] text-smoke">
+            {days} {days === 1 ? 'day' : 'days'}
+            <div className="text-[11px] text-smoke/70">per person</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tier presets — snap the slider to a band in one tap */}
+      <div className="mt-4 grid grid-cols-4 gap-2">
+        {BUDGET_TIERS.map((t) => {
+          const selected = t.id === tier
+          return (
+            <button
+              key={t.id}
+              onClick={() => onChange(t.value)}
+              className={`tappable border-trans inline-flex h-10 items-center justify-center whitespace-nowrap rounded-xl border px-1 text-[11px] font-semibold backdrop-blur-xl ${
+                selected
+                  ? 'border-steel-soft bg-slate-2/80 text-mist'
+                  : 'border-white/[0.08] bg-slate/40 text-fog'
+              }`}
+            >
+              {t.id}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* What this tier buys */}
+      {activeTier && (
+        <p className="mt-4 px-1 text-[13px] leading-[19px] text-fog">{activeTier.blurb}</p>
+      )}
+    </QuestionFrame>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Profile — experience + optional needs                                     */
+/* -------------------------------------------------------------------------- */
+
+function Profile({
+  answers,
+  onPatch,
+  onBack,
+  onNext,
+  onSkip,
+  preview,
+}: {
+  answers: Answers
+  onPatch: (p: Partial<Answers>) => void
+  onBack: () => void
+  onNext: () => void
+  onSkip: () => void
+  preview?: React.ReactNode
+}) {
+  const toggleNeed = (id: string) =>
+    onPatch({
+      needs: answers.needs.includes(id)
+        ? answers.needs.filter((n) => n !== id)
+        : [...answers.needs, id],
+    })
+
+  return (
+    <QuestionFrame
+      screen="profile"
+      title="A little about you"
+      onBack={onBack}
+      onNext={onNext}
+      onSkip={onSkip}
+      preview={preview}
+      backgroundImage={ONBOARDING_BACKGROUNDS.profile}
+    >
+      <div className="space-y-2.5">
+        {EXPERIENCE_OPTIONS.map((e) => {
+          const Icon = EXPERIENCE_ICONS[e.icon] ?? Compass
+          const selected = answers.experience === e.id
+          return (
+            <button
+              key={e.id}
+              onClick={() => onPatch({ experience: e.id })}
+              className={`tappable border-trans flex w-full items-center gap-3.5 rounded-2xl border p-4 text-left backdrop-blur-xl ${
+                selected ? 'border-steel-soft bg-slate-2/80' : 'border-white/[0.08] bg-slate/40'
+              }`}
+            >
+              <div className={`flex h-10 w-10 items-center justify-center rounded-full ${selected ? 'bg-mist text-ink' : 'bg-white/[0.07] text-fog'}`}>
+                <Icon size={19} weight={selected ? 'fill' : 'regular'} />
+              </div>
+              <div className="flex-1">
+                <div className="text-[15.5px] font-semibold text-mist">{e.label}</div>
+                <div className="text-[12.5px] text-fog">{e.sub}</div>
+              </div>
+              {selected && <CheckCircle size={19} weight="fill" className="text-mist" />}
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="mt-6">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-smoke">
+          Anything we should know? <span className="text-smoke/60">Optional</span>
+        </div>
+        <div className="mt-3 space-y-4">
+          {NEEDS_GROUPS.map((g) => (
+            <div key={g.group}>
+              <div className="mb-2 text-[12px] font-medium text-fog">{g.group}</div>
+              <div className="flex flex-wrap gap-2">
+                {g.items.map((it) => {
+                  const selected = answers.needs.includes(it.id)
+                  return (
+                    <button
+                      key={it.id}
+                      onClick={() => toggleNeed(it.id)}
+                      className={`tappable border-trans inline-flex h-9 items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-medium backdrop-blur-xl ${
+                        selected ? 'border-steel-soft bg-slate-2/80 text-mist' : 'border-white/[0.08] bg-slate/40 text-fog'
+                      }`}
+                    >
+                      {selected && <CheckCircle size={13} weight="fill" className="text-steel-soft" />}
+                      {it.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </QuestionFrame>
@@ -1044,65 +1424,103 @@ function Budget({
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Review & personalize                                                      */
+/* -------------------------------------------------------------------------- */
 
-// Short forms of the prep anchors for the slider rail. The full label still
-// shows above the slider; these are just for the tick markers below.
-const PREP_SHORT = ['Dreaming', 'Dates', 'Flights', 'Booked']
-
-function Preparedness({
-  value,
-  onChange,
+function Review({
+  answers,
+  go,
   onBack,
-  onNext,
-  step,
-  country,
+  onGenerate,
 }: {
-  value: number
-  onChange: (v: number) => void
+  answers: Answers
+  go: (s: ScreenId) => void
   onBack: () => void
-  onNext: () => void
-  step: number
-  country: string
+  onGenerate: () => void
 }) {
+  const plan = useMemo(() => personalizePlan(selectBasePlan(answers), answers), [answers])
+  const p = plan.personalization
+  const total = plan.categories.reduce((a, c) => a + c.total, 0)
+  const ready = plan.briefingBuckets.now.length
+
+  const chips: Array<{ label: string; screen: ScreenId }> = [
+    { label: `${flagEmoji(answers.countryCode)} ${answers.countryName || plan.country.name}`, screen: 'country' },
+    { label: `${answers.durationDays} days`, screen: 'duration' },
+    {
+      label:
+        p?.countdownDays != null ? `${p.countdownDays} days out` : answers.dateMode === 'within3' ? 'Within 3 months' : 'Flexible dates',
+      screen: 'date',
+    },
+    { label: travelerLabel(answers), screen: 'travelers' },
+    ...(p?.focus.length ? [{ label: p.focus.join(' · '), screen: 'interests' as ScreenId }] : []),
+    { label: `${p?.paceLabel ?? 'Balanced'} pace`, screen: 'pace' },
+    { label: `${p?.budgetTier ?? budgetTier(answers.budget)} · ~$${plan.budgetTarget?.perDayUsd}/day`, screen: 'budget' },
+    { label: p?.experienceLabel ?? 'A few trips in', screen: 'profile' },
+    ...(p?.dietary.length ? [{ label: p.dietary.join(', '), screen: 'profile' as ScreenId }] : []),
+  ]
+
+  const includes: string[] = [
+    `${total} sequenced briefings, ${ready} ready now`,
+    p?.focus.length ? `Itinerary & briefings weighted toward ${p.focus.join(' & ').toLowerCase()}` : 'A balanced, all-round itinerary',
+    `~$${plan.budgetTarget?.perDayUsd}/day ${(p?.budgetTier ?? '').toLowerCase()} target`,
+    ...(p?.dietary.length ? [`Dietary phrase card (${p.dietary.join(', ').toLowerCase()})`] : []),
+    ...(p?.countdownDays != null ? [`A live ${p.countdownDays}-day countdown to departure`] : []),
+    `Offline Landing Day Hub for ${plan.arrivalAirport.city || plan.heroCity}`,
+  ]
+
   return (
     <QuestionFrame
-      step={step}
-      title="How prepared are you?"
-      subtitle={`We’ll guide you through everything for ${country}.`}
+      screen="review"
+      title="Review & personalize"
       onBack={onBack}
-      onNext={onNext}
+      onNext={onGenerate}
       nextLabel="Generate my plan"
-      backgroundImage={ONBOARDING_BACKGROUNDS.preparedness}
     >
-      <div className="rounded-3xl border border-white/[0.08] bg-slate/40 p-6 shadow-card backdrop-blur-xl">
-        <div className="font-display text-[20px] font-semibold leading-tight text-mist">
-          {PREP_ANCHORS[value]}
+      {/* Summary chips — each jumps back to its step to edit. */}
+      <div className="rounded-3xl border border-border-default bg-slate p-5 shadow-card">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-smoke">Tailored for you</div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {chips.map((c, i) => (
+            <button
+              key={`${c.screen}-${i}`}
+              onClick={() => go(c.screen)}
+              className="tappable border-trans inline-flex items-center gap-1.5 rounded-full border border-white/[0.10] bg-white/[0.05] px-3 py-1.5 text-[12.5px] font-medium text-fog hover:border-steel-soft/70 hover:text-mist"
+            >
+              {c.label}
+              <PencilSimple size={11} className="text-smoke" />
+            </button>
+          ))}
         </div>
-        <div className="mt-1 text-[13px] text-fog">
-          {value === 0 && 'We’ll start with the big-picture sequence.'}
-          {value === 1 && 'Great. Let’s lock in flights and visa first.'}
-          {value === 2 && 'You’re ahead. Now the on-ground readiness.'}
-          {value === 3 && 'Final pre-departure and Landing Day Hub for you.'}
-        </div>
-        <div className="mt-7">
-          <Slider
-            value={value}
-            min={0}
-            max={3}
-            onChange={onChange}
-            ariaLabel="Preparedness"
-          />
-          <div className="mt-2 flex justify-between text-[11px] font-semibold uppercase tracking-[0.12em] text-smoke">
-            {PREP_SHORT.map((s, i) => (
-              <span key={s} className={i === value ? 'text-mist' : ''}>
-                {s}
-              </span>
-            ))}
-          </div>
-        </div>
+      </div>
+
+      {/* What the plan will include — real computed numbers. */}
+      <div className="mt-4 rounded-3xl border border-border-default bg-slate p-5 shadow-card">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-smoke">Your plan will include</div>
+        <ul className="mt-3 space-y-2.5">
+          {includes.map((line, i) => (
+            <li key={i} className="fade-up flex items-start gap-3" style={{ animationDelay: `${i * 60}ms` }}>
+              <CheckCircle size={18} weight="fill" className="mt-0.5 shrink-0 text-steel-soft" />
+              <span className="text-[14px] leading-[19px] text-fog">{line}</span>
+            </li>
+          ))}
+        </ul>
       </div>
     </QuestionFrame>
   )
+}
+
+function travelerLabel(a: Answers): string {
+  const base =
+    a.travelers === 'solo'
+      ? 'Solo'
+      : a.travelers === 'couple'
+        ? 'Couple'
+        : a.travelers === 'family'
+          ? 'Family'
+          : 'Group'
+  return a.partySize && a.partySize > 1 && a.travelers !== 'couple'
+    ? `${base} · ${a.partySize}`
+    : base
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1118,7 +1536,6 @@ const LOADING_STEPS = [
   'Landing Day Hub',
 ]
 
-// Shown once the checklist has played but the plan is still generating.
 const WAIT_MSGS = [
   'Tailoring your briefings…',
   'Mapping your route…',
@@ -1130,14 +1547,18 @@ const WAIT_MSGS = [
 export function Loading({
   onDone,
   ready = true,
+  sequencedFor,
+  focus,
 }: {
   onDone: () => void
   ready?: boolean
+  /** Optional personalization captions from the just-generated plan. */
+  sequencedFor?: string
+  focus?: string[]
 }) {
   const [completed, setCompleted] = useState(0)
   const doneRef = useRef(false)
 
-  // Advance the checklist on a cinematic cadence (independent of the fetch).
   useEffect(() => {
     let cancelled = false
     const timeouts: number[] = []
@@ -1156,7 +1577,6 @@ export function Loading({
     }
   }, [])
 
-  // Finish only once the checklist has played AND the real plan is ready.
   useEffect(() => {
     if (doneRef.current) return
     if (ready && completed >= LOADING_STEPS.length) {
@@ -1166,8 +1586,6 @@ export function Loading({
     }
   }, [ready, completed, onDone])
 
-  // While the checklist is done but the plan is still generating, cycle a
-  // reassuring caption so the wait reads as deliberate.
   const waiting = completed >= LOADING_STEPS.length && !ready
   const [tipIdx, setTipIdx] = useState(0)
   useEffect(() => {
@@ -1176,14 +1594,18 @@ export function Loading({
     return () => clearInterval(id)
   }, [waiting])
 
+  const caption =
+    focus && focus.length
+      ? `Weighting toward ${focus.slice(0, 2).join(' & ').toLowerCase()}`
+      : sequencedFor
+        ? `Sequencing for ${sequencedFor}`
+        : 'We’re sequencing every task from now to landing day.'
+
   return (
     <div className="relative h-full w-full overflow-hidden bg-ink no-select">
       <div
         className="absolute inset-0 opacity-[0.18]"
-        style={{
-          background:
-            'radial-gradient(circle at 50% 35%, rgba(129,147,168,0.45) 0%, transparent 60%)',
-        }}
+        style={{ background: 'radial-gradient(circle at 50% 35%, rgba(129,147,168,0.45) 0%, transparent 60%)' }}
       />
       <div className="relative flex h-full w-full flex-col px-6 pb-10 pt-[100px]">
         <div className="flex flex-col items-center text-center">
@@ -1194,9 +1616,7 @@ export function Loading({
             Generating your
             <br /> personalized plan…
           </h2>
-          <p className="mt-2 max-w-[280px] text-[14px] leading-[20px] text-fog">
-            We’re sequencing every task from now to landing day.
-          </p>
+          <p className="mt-2 max-w-[300px] text-[14px] leading-[20px] text-fog">{caption}</p>
         </div>
 
         <div className="glass mt-10 rounded-3xl p-5">
@@ -1208,25 +1628,13 @@ export function Loading({
                 <li key={s} className="flex items-center gap-3">
                   <div
                     className={`flex h-6 w-6 items-center justify-center rounded-full transition-colors ${
-                      done
-                        ? 'bg-mist text-ink'
-                        : active
-                          ? 'border-2 border-steel-soft'
-                          : 'border border-border-default'
+                      done ? 'bg-mist text-ink' : active ? 'border-2 border-steel-soft' : 'border border-border-default'
                     }`}
                   >
                     {done && <CheckCircle size={16} weight="fill" />}
-                    {active && (
-                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-steel-soft" />
-                    )}
+                    {active && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-steel-soft" />}
                   </div>
-                  <span
-                    className={`text-[15px] ${
-                      done ? 'text-mist' : active ? 'text-mist' : 'text-fog'
-                    }`}
-                  >
-                    {s}
-                  </span>
+                  <span className={`text-[15px] ${done ? 'text-mist' : active ? 'text-mist' : 'text-fog'}`}>{s}</span>
                   {active && (
                     <span className="ml-auto text-[12px] font-semibold uppercase tracking-[0.12em] text-steel-soft">
                       Working
@@ -1239,11 +1647,7 @@ export function Loading({
         </div>
 
         {waiting && (
-          <p
-            key={tipIdx}
-            className="fade-up mt-6 text-center text-[13px] font-medium text-smoke"
-            aria-live="polite"
-          >
+          <p key={tipIdx} className="fade-up mt-6 text-center text-[13px] font-medium text-smoke" aria-live="polite">
             {WAIT_MSGS[tipIdx % WAIT_MSGS.length]}
           </p>
         )}
@@ -1251,4 +1655,3 @@ export function Loading({
     </div>
   )
 }
-
